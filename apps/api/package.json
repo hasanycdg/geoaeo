@@ -13,7 +13,7 @@
     "@geo/db": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",
-    "stripe": "^17.5.0"
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "tsx": "^4.19.2"
