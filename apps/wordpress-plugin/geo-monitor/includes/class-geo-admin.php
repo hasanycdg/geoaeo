@@ -30,7 +30,7 @@ class Geo_Admin {
 
     private function ensure_provisioned() {
         if (!get_option('geo_monitor_api_key')) {
-            Geo_Monitor_Provisioning::provision(get_current_user_id());
+            Geo_Provisioning::provision();
         }
         return (bool) get_option('geo_monitor_api_key');
     }
@@ -38,7 +38,7 @@ class Geo_Admin {
     public function render() {
         if (!$this->ensure_provisioned()) {
             echo '<div class="wrap"><h1>GEO Monitor</h1><div class="notice notice-error"><p>' .
-                esc_html__('Could not connect to the GEO backend. Ensure Application Passwords are enabled and the site is reachable.', 'geo-monitor') .
+                esc_html__('Could not connect to the GEO backend. Make sure this site is publicly reachable (the backend fetches /?geo_verify=1 to confirm ownership).', 'geo-monitor') .
                 '</p></div></div>';
             return;
         }
@@ -206,13 +206,18 @@ class Geo_Admin {
 
     public function scan_now() {
         $this->guard('geo_scan');
+        Geo_Sync::push(); // send the latest catalog before scanning
         $this->client->post('/api/v1/scan');
         $this->back();
     }
 
     public function generate_llms() {
         $this->guard('geo_generate_llms');
-        $this->client->post('/api/v1/content/llms-txt');
+        Geo_Sync::push(); // ensure the backend has the latest catalog
+        $res = $this->client->post('/api/v1/content/llms-txt');
+        if (!is_wp_error($res) && !empty($res['content'])) {
+            update_option('geo_monitor_llms_txt', $res['content'], false);
+        }
         $this->back();
     }
 

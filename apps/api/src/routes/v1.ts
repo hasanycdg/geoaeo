@@ -2,7 +2,7 @@
 // the requireTenant middleware. WordPress plugins and the Shopify app both hit
 // these routes. Breaking changes go to v2 (see routes/v2.ts).
 import { Hono } from "hono";
-import { prisma } from "@geo/db";
+import { prisma, Prisma } from "@geo/db";
 import { enqueueTenantScan } from "@geo/core/queue";
 import { getDashboard } from "@geo/core/models";
 import { runAudit } from "@geo/core/audit";
@@ -53,6 +53,25 @@ v1.post("/tenant", async (c) => {
     },
   });
   return c.json({ tenant: updated });
+});
+
+// WordPress push sync: the plugin sends the locally-gathered store profile +
+// catalog (no REST pull). Cached on the tenant; the WP adapter reads it. Shopify
+// tenants never call this (they read the live Admin API).
+v1.post("/wp/sync", async (c) => {
+  const t = tenantOf(c);
+  const body = await c.req.json<{
+    storeProfile?: { name?: string; description?: string | null; primaryUrl?: string };
+    catalog?: unknown[];
+  }>();
+  await prisma.tenant.update({
+    where: { id: t.id },
+    data: {
+      storeProfile: body.storeProfile ?? undefined,
+      catalog: body.catalog === undefined ? undefined : (body.catalog as Prisma.InputJsonValue),
+    },
+  });
+  return c.json({ ok: true, items: Array.isArray(body.catalog) ? body.catalog.length : 0 });
 });
 
 v1.post("/prompts", async (c) => {

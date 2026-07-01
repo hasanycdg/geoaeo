@@ -127,6 +127,17 @@ model Tenant {
   llmsTxt            String?
   llmsTxtGeneratedAt DateTime?
 
+  // WordPress push model: the plugin (running inside WP, no external REST needed)
+  // pushes these; the WordpressRestAdapter reads them instead of calling WP.
+  // Always null for Shopify tenants (the Shopify adapter reads the live Admin API).
+  storeProfile Json? // { name, description, primaryUrl }
+  catalog      Json? // CatalogItem[]
+
+  // Domain-control proof for WordPress onboarding via a public-file challenge
+  // (the site serves this token at /?geo_verify=1 — no REST access required).
+  verifyToken String?
+  verifiedAt  DateTime?
+
   // Worker-health: surface silent scan failures in the UI.
   lastScanCompletedAt DateTime?
   lastScanError       String?

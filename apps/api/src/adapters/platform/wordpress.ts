@@ -1,123 +1,65 @@
-// WordpressRestAdapter — PlatformPort backed by the WordPress REST API,
-// authorized with an Application Password (Basic auth) issued to the plugin.
-// Products come from WooCommerce (/wc/v3/products) when present; otherwise the
-// adapter falls back to standard posts so llms.txt still has content.
+// WordpressPushAdapter — PlatformPort for WordPress in the PUSH model.
+//
+// The plugin runs inside WordPress (full local access) and pushes the store
+// profile + catalog to the backend (POST /api/v1/wp/sync), cached on the Tenant.
+// This adapter reads that cache instead of calling the WP REST API, so it works
+// even on hosts that block /wp-json externally (managed WP, security plugins).
+//
+// Only genuinely public resources (robots.txt, a product page's HTML for the
+// schema audit) are still fetched directly — those are reachable everywhere.
 import type { Tenant } from "@geo/db";
 import type { CatalogItem, PlatformPort, StoreProfile } from "@geo/core/ports";
 
-export interface WordpressCredential {
-  /** WP username the application password belongs to. */
-  username: string;
-  /** The application password (spaces allowed; sent as-is in Basic auth). */
-  appPassword: string;
-}
-
-interface WooProduct {
-  id: number;
-  name: string;
-  slug: string;
-  permalink: string;
-  description: string;
-  short_description: string;
-  categories?: { name: string }[];
-  tags?: { name: string }[];
-}
-
-interface WpPost {
-  id: number;
-  slug: string;
-  link: string;
-  title: { rendered: string };
-  excerpt: { rendered: string };
+interface CachedStoreProfile {
+  name?: string;
+  description?: string | null;
+  primaryUrl?: string;
 }
 
 export class WordpressRestAdapter implements PlatformPort {
   readonly platform = "WORDPRESS" as const;
   private readonly base: string;
 
-  constructor(
-    tenant: Tenant,
-    private readonly cred: WordpressCredential,
-  ) {
+  constructor(private readonly tenant: Tenant) {
     this.base = tenant.externalId.replace(/\/$/, "");
   }
 
-  private authHeader(): string {
-    const token = Buffer.from(`${this.cred.username}:${this.cred.appPassword}`).toString("base64");
-    return `Basic ${token}`;
-  }
-
-  private async get<T>(path: string): Promise<T | null> {
-    try {
-      const res = await fetch(`${this.base}${path}`, {
-        headers: { Authorization: this.authHeader(), "User-Agent": "GEO-Monitor/1.0" },
-      });
-      if (!res.ok) return null;
-      return (await res.json()) as T;
-    } catch {
-      return null;
-    }
-  }
-
   async getStoreProfile(tenant: Tenant): Promise<StoreProfile> {
-    const info = await this.get<{ name?: string; description?: string; url?: string }>("/wp-json");
+    const p = (tenant.storeProfile as CachedStoreProfile | null) ?? {};
     return {
-      name: info?.name ?? tenant.externalId,
-      description: info?.description ?? null,
-      primaryUrl: info?.url ?? this.base,
+      name: p.name ?? tenant.brandName ?? tenant.externalId,
+      description: p.description ?? null,
+      primaryUrl: p.primaryUrl ?? this.base,
     };
   }
 
-  async listProducts(): Promise<CatalogItem[]> {
-    // Prefer WooCommerce products.
-    const woo = await this.get<WooProduct[]>("/wp-json/wc/v3/products?per_page=100&status=publish");
-    if (woo && woo.length) {
-      return woo.map((p) => ({
-        externalId: String(p.id),
-        title: p.name,
-        handle: p.slug,
-        description: p.description || p.short_description || null,
-        url: p.permalink,
-        productType: p.categories?.[0]?.name ?? null,
-        tags: (p.tags ?? []).map((t) => t.name),
-      }));
-    }
-    // Fallback: standard posts.
-    const posts = await this.get<WpPost[]>("/wp-json/wp/v2/posts?per_page=100&status=publish");
-    return (posts ?? []).map((p) => ({
-      externalId: String(p.id),
-      title: p.title.rendered,
-      handle: p.slug,
-      description: p.excerpt.rendered.replace(/<[^>]*>/g, " ").trim() || null,
-      url: p.link,
-      productType: null,
-      tags: [],
-    }));
+  async listProducts(tenant: Tenant): Promise<CatalogItem[]> {
+    const catalog = tenant.catalog as CatalogItem[] | null;
+    return Array.isArray(catalog) ? catalog : [];
   }
 
   async getRobotsTxt(): Promise<string | null> {
     return this.fetchUrl(`${this.base}/robots.txt`);
   }
 
+  /** Public page fetch (schema/JSON-LD audit). Public URLs are reachable even
+   *  when /wp-json is locked down, so this stays a direct fetch. */
   async fetchUrl(url: string): Promise<string | null> {
     try {
-      const res = await fetch(url, { headers: { "User-Agent": "GEO-Monitor/1.0" } });
+      const res = await fetch(url, {
+        headers: {
+          // Browser-like UA so hardened hosts / WAFs don't 403 the request.
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+        },
+        redirect: "follow",
+      });
       return res.ok ? await res.text() : null;
     } catch {
       return null;
     }
   }
 
-  /** Push llms.txt to the plugin, which writes it to the site root. */
-  async publishLlmsTxt(_tenant: Tenant, body: string): Promise<void> {
-    await fetch(`${this.base}/wp-json/geo-monitor/v1/llms-txt`, {
-      method: "POST",
-      headers: {
-        Authorization: this.authHeader(),
-        "Content-Type": "application/json",
-        "User-Agent": "GEO-Monitor/1.0",
-      },
-      body: JSON.stringify({ content: body }),
-    });
-  }
+  // No publishLlmsTxt: the plugin PULLS the generated llms.txt from the backend
+  // (GET /api/v1/content/llms-txt) and serves it, so the backend never pushes.
 }

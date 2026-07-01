@@ -1,7 +1,10 @@
-// Zero-config onboarding for WordPress. The plugin creates a WP Application
-// Password on install and POSTs it here. We verify control of the site by
-// calling its REST API with those credentials, then mint an API key the plugin
-// uses for all subsequent v1 calls. No manual key copying by the merchant.
+// Zero-config onboarding for WordPress (PUSH model).
+//
+// The plugin generates a random token, serves it at the PUBLIC url
+// https://<site>/?geo_verify=1 (no REST access needed), then POSTs {siteUrl,
+// verifyToken} here. We fetch that public url and confirm it serves the token —
+// proving the caller controls the domain — then mint the API key the plugin uses
+// for all subsequent v1 calls. Works on hosts that block /wp-json externally.
 import { Hono } from "hono";
 import crypto from "node:crypto";
 import { prisma } from "@geo/db";
@@ -9,40 +12,41 @@ import { sha256 } from "../tenant";
 
 const onboard = new Hono();
 
+// Browser-like UA so hardened hosts / WAFs don't 403 the verification fetch.
+const VERIFY_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36";
+
 onboard.post("/wordpress", async (c) => {
-  const { siteUrl, username, appPassword } = await c.req.json<{
+  const { siteUrl, verifyToken } = await c.req.json<{
     siteUrl: string;
-    username: string;
-    appPassword: string;
+    verifyToken: string;
   }>();
-  if (!siteUrl || !username || !appPassword) return c.json({ error: "missing_fields" }, 400);
+  if (!siteUrl || !verifyToken) return c.json({ error: "missing_fields" }, 400);
 
   const externalId = siteUrl.replace(/\/$/, "");
-  const auth = "Basic " + Buffer.from(`${username}:${appPassword}`).toString("base64");
 
-  // Proof-of-control: the credentials must authenticate against the site.
-  const check = await fetch(`${externalId}/wp-json/wp/v2/users/me`, {
-    headers: { Authorization: auth, "User-Agent": "GEO-Monitor/1.0" },
+  // Proof-of-control: the site must serve our token at its public verify url.
+  const res = await fetch(`${externalId}/?geo_verify=1`, {
+    headers: { "User-Agent": VERIFY_UA },
+    redirect: "follow",
   }).catch(() => null);
-  if (!check || !check.ok) return c.json({ error: "site_verification_failed" }, 401);
+  const body = res && res.ok ? (await res.text()).trim() : null;
+  if (!body || !body.includes(verifyToken)) {
+    return c.json({ error: "site_verification_failed" }, 401);
+  }
 
   const apiKey = crypto.randomBytes(24).toString("hex");
   const tenant = await prisma.tenant.upsert({
     where: { platform_externalId: { platform: "WORDPRESS", externalId } },
-    update: {},
-    create: { platform: "WORDPRESS", externalId },
+    update: { verifyToken, verifiedAt: new Date() },
+    create: { platform: "WORDPRESS", externalId, verifyToken, verifiedAt: new Date() },
   });
+  // A credential row still holds the API-key hash used by requireTenant. No WP
+  // secret is stored anymore (the push model needs no callback credentials).
   await prisma.tenantCredential.upsert({
     where: { tenantId: tenant.id },
-    update: {
-      secret: JSON.stringify({ username, appPassword }),
-      meta: { apiKeyHash: sha256(apiKey), restBase: externalId },
-    },
-    create: {
-      tenantId: tenant.id,
-      secret: JSON.stringify({ username, appPassword }),
-      meta: { apiKeyHash: sha256(apiKey), restBase: externalId },
-    },
+    update: { secret: "", meta: { apiKeyHash: sha256(apiKey) } },
+    create: { tenantId: tenant.id, secret: "", meta: { apiKeyHash: sha256(apiKey) } },
   });
 
   return c.json({ apiKey, tenantId: tenant.id, plan: tenant.plan });

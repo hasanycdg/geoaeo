@@ -5,7 +5,7 @@ import type { Tenant } from "@geo/db";
 import { prisma } from "@geo/db";
 import type { BillingPort, PlatformPort } from "@geo/core/ports";
 import { ShopifyAdminAdapter } from "./platform/shopify";
-import { WordpressRestAdapter, type WordpressCredential } from "./platform/wordpress";
+import { WordpressRestAdapter } from "./platform/wordpress";
 import { ShopifyBillingAdapter } from "./billing/shopify";
 import { StripeBillingAdapter } from "./billing/stripe";
 
@@ -31,9 +31,10 @@ export async function adaptersFor(tenant: Tenant): Promise<Adapters> {
       };
     }
     case "WORDPRESS": {
-      const cred = JSON.parse(await loadSecret(tenant.id)) as WordpressCredential;
+      // Push model: the adapter reads catalog/profile cached on the tenant (pushed
+      // by the plugin), so no stored WP credential is needed here.
       return {
-        platform: new WordpressRestAdapter(tenant, cred),
+        platform: new WordpressRestAdapter(tenant),
         billing: new StripeBillingAdapter(),
       };
     }
