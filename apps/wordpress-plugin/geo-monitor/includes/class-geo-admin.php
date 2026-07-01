@@ -23,6 +23,7 @@ class Geo_Admin {
         add_action('admin_post_geo_scan', array($this, 'scan_now'));
         add_action('admin_post_geo_upgrade', array($this, 'upgrade'));
         add_action('admin_post_geo_generate_llms', array($this, 'generate_llms'));
+        add_action('admin_post_geo_deep', array($this, 'run_deep'));
     }
 
     public function menu() {
@@ -78,41 +79,9 @@ class Geo_Admin {
         $this->notices();
         echo '<div class="geo-grid">';
 
-        // --- AI Visibility ---------------------------------------------------
-        echo '<div class="geo-card span2"><h2>' . esc_html__('AI Visibility', 'geo-monitor') . '</h2>';
-        if (is_wp_error($dash) || empty($dash['hasData'])) {
-            echo '<div class="geo-empty"><span class="geo-emoji">📡</span><p><strong>' .
-                esc_html__('No scans yet.', 'geo-monitor') . '</strong></p>';
-            if (!$brand) {
-                echo '<p class="geo-muted">' . esc_html__('Set your brand name and add a prompt, then run a scan.', 'geo-monitor') . '</p>';
-            } elseif (!$prompts) {
-                echo '<p class="geo-muted">' . esc_html__('Add at least one prompt, then run a scan.', 'geo-monitor') . '</p>';
-            }
-            echo '</div>';
-        } else {
-            echo '<table class="geo-metrics"><thead><tr><th>' . esc_html__('Engine', 'geo-monitor') . '</th><th>' .
-                esc_html__('Mention rate', 'geo-monitor') . '</th><th>' . esc_html__('Avg. position', 'geo-monitor') .
-                '</th><th>' . esc_html__('Sentiment', 'geo-monitor') . '</th></tr></thead><tbody>';
-            foreach ($dash['providers'] as $p) {
-                $rate = (int) round($p['mentionRate'] * 100);
-                $sent = strtoupper((string) $p['sentiment']);
-                $cls  = $sent === 'POSITIVE' ? 'pos' : ($sent === 'NEGATIVE' ? 'neg' : 'neu');
-                printf(
-                    '<tr><td class="geo-engine">%s</td>' .
-                    '<td><div class="geo-row" style="gap:10px"><span class="geo-bar"><span style="width:%d%%"></span></span><span>%d%%</span></div></td>' .
-                    '<td>%s</td><td><span class="geo-badge %s">%s</span></td></tr>',
-                    esc_html($p['provider']), $rate, $rate,
-                    esc_html($p['avgPosition'] !== null ? number_format($p['avgPosition'], 1) : '—'),
-                    esc_attr($cls), esc_html($sent)
-                );
-            }
-            echo '</tbody></table>';
-        }
-        echo '<div style="margin-top:18px">';
-        $this->action_form('geo_scan', __('Run scan now', 'geo-monitor'), 'primary');
-        echo '<p class="geo-muted" style="margin-top:10px">' .
-            esc_html__('Scans run in the background (~15–30s). Reload the page to see results.', 'geo-monitor') . '</p>';
-        echo '</div></div>';
+        // --- AI Visibility + Deep Analysis -----------------------------------
+        $this->render_visibility($dash, $limits, $brand, $prompts);
+        $this->render_deep($dash);
 
         // --- Brand -----------------------------------------------------------
         echo '<div class="geo-card"><h2>' . esc_html__('Brand', 'geo-monitor') . '</h2>';
@@ -210,6 +179,155 @@ class Geo_Admin {
         }
     }
 
+    /** AI Visibility table: real rows for in-plan engines, locked rows for the rest. */
+    private function render_visibility($dash, $limits, $brand, $prompts) {
+        $engines = array(
+            'OPENAI'     => 'ChatGPT',
+            'ANTHROPIC'  => 'Claude',
+            'GEMINI'     => 'Gemini',
+            'PERPLEXITY' => 'Perplexity',
+        );
+        $allowed = (isset($limits['providers']) && is_array($limits['providers'])) ? $limits['providers'] : array('OPENAI');
+        $data = array();
+        if (!is_wp_error($dash) && !empty($dash['providers'])) {
+            foreach ($dash['providers'] as $p) {
+                $data[strtoupper($p['provider'])] = $p;
+            }
+        }
+        $hasData = !is_wp_error($dash) && !empty($dash['hasData']);
+
+        echo '<div class="geo-card span2"><h2>' . esc_html__('AI Visibility', 'geo-monitor') . '</h2>';
+        echo '<table class="geo-metrics"><thead><tr><th>' . esc_html__('Engine', 'geo-monitor') . '</th><th>' .
+            esc_html__('Mention rate', 'geo-monitor') . '</th><th>' . esc_html__('Avg. position', 'geo-monitor') .
+            '</th><th>' . esc_html__('Sentiment', 'geo-monitor') . '</th></tr></thead><tbody>';
+
+        foreach ($engines as $key => $label) {
+            if (!in_array($key, $allowed, true)) {
+                printf(
+                    '<tr class="locked"><td class="geo-engine">%s</td><td colspan="3"><span class="geo-lock">🔒 %s <span class="up">%s</span></span></td></tr>',
+                    esc_html($label),
+                    esc_html__('Premium', 'geo-monitor'),
+                    esc_html__('— upgrade to track this engine', 'geo-monitor')
+                );
+                continue;
+            }
+            if (isset($data[$key])) {
+                $p = $data[$key];
+                $rate = (int) round($p['mentionRate'] * 100);
+                $sent = strtoupper((string) $p['sentiment']);
+                $cls  = $sent === 'POSITIVE' ? 'pos' : ($sent === 'NEGATIVE' ? 'neg' : 'neu');
+                printf(
+                    '<tr><td class="geo-engine">%s</td>' .
+                    '<td><div class="geo-row" style="gap:10px"><span class="geo-bar"><span style="width:%d%%"></span></span><span>%d%%</span></div></td>' .
+                    '<td>%s</td><td><span class="geo-badge %s">%s</span></td></tr>',
+                    esc_html($label), $rate, $rate,
+                    esc_html($p['avgPosition'] !== null ? number_format($p['avgPosition'], 1) : '—'),
+                    esc_attr($cls), esc_html($sent)
+                );
+            } else {
+                printf('<tr><td class="geo-engine">%s</td><td colspan="3" class="geo-muted">%s</td></tr>',
+                    esc_html($label), esc_html__('No scans yet', 'geo-monitor'));
+            }
+        }
+        echo '</tbody></table>';
+
+        if (!$hasData) {
+            echo '<p class="geo-muted" style="margin-top:14px">';
+            if (!$brand) {
+                echo esc_html__('Set your brand name and add a prompt, then run a scan.', 'geo-monitor');
+            } elseif (!$prompts) {
+                echo esc_html__('Add at least one prompt, then run a scan.', 'geo-monitor');
+            } else {
+                echo esc_html__('Run your first scan to see results.', 'geo-monitor');
+            }
+            echo '</p>';
+        }
+
+        echo '<div style="margin-top:16px">';
+        $this->action_form('geo_scan', __('Run scan now', 'geo-monitor'), 'primary');
+        echo '<p class="geo-muted" style="margin-top:10px">' .
+            esc_html__('Scans run in the background (~15–30s). Reload the page to see results.', 'geo-monitor') . '</p>';
+        echo '</div></div>';
+    }
+
+    /**
+     * Deep Analysis: share of AI answers, competitor gaps, and a concrete fix list
+     * from the Action-Layer audit. Free during beta; the button is where a plan
+     * gate goes later.
+     */
+    private function render_deep($dash) {
+        $active = isset($_GET['geo_deep']) && $_GET['geo_deep'] === '1';
+
+        echo '<div class="geo-card span2"><h2>' . esc_html__('Deep Analysis', 'geo-monitor') .
+            '<span class="geo-ribbon">' . esc_html__('Beta · free', 'geo-monitor') . '</span></h2>';
+
+        if (!$active) {
+            echo '<div class="geo-deep-teaser"><p class="geo-hint">' .
+                esc_html__('See where competitors beat you in AI answers — and exactly what to fix on your site so assistants recommend you.', 'geo-monitor') . '</p>';
+            $this->action_form('geo_deep', __('Show deep analysis', 'geo-monitor'), 'primary');
+            echo '</div></div>';
+            return;
+        }
+
+        $share = (!is_wp_error($dash) && isset($dash['shareOfModel'])) ? $dash['shareOfModel'] : null;
+        $gaps  = (!is_wp_error($dash) && !empty($dash['gaps'])) ? $dash['gaps'] : array();
+        $recsRes = $this->client->get('/api/v1/recommendations');
+        $recs = (!is_wp_error($recsRes) && !empty($recsRes['recommendations'])) ? $recsRes['recommendations'] : array();
+
+        // Share of AI answers
+        echo '<div class="geo-insight"><h3>' . esc_html__('Share of AI answers', 'geo-monitor') . '</h3>';
+        $rows = array();
+        if ($share) {
+            $rows[] = array('name' => __('You', 'geo-monitor'), 'count' => isset($share['brand']) ? (int) $share['brand'] : 0, 'me' => true);
+            if (!empty($share['competitors'])) {
+                foreach ($share['competitors'] as $comp) {
+                    $rows[] = array('name' => $comp['name'], 'count' => (int) $comp['count'], 'me' => false);
+                }
+            }
+        }
+        if (count($rows) && array_sum(array_column($rows, 'count')) > 0) {
+            $max = 1;
+            foreach ($rows as $r) { $max = max($max, $r['count']); }
+            foreach ($rows as $r) {
+                printf('<div class="geo-sh"><span class="lbl">%s</span><span class="track"><span class="%s" style="width:%d%%"></span></span><span class="val">%d</span></div>',
+                    esc_html($r['name']), $r['me'] ? 'me' : 'them', (int) round($r['count'] / $max * 100), $r['count']);
+            }
+        } else {
+            echo '<p class="geo-muted">' . esc_html__('No mentions recorded yet — run a scan first.', 'geo-monitor') . '</p>';
+        }
+        echo '</div>';
+
+        // Competitor gaps
+        echo '<div class="geo-insight"><h3>' . esc_html__('Where competitors win', 'geo-monitor') . '</h3>';
+        if (!empty($gaps)) {
+            echo '<ul class="geo-chips">';
+            foreach ($gaps as $g) {
+                printf('<li class="geo-chip"><span>%s</span><span class="geo-muted">%s</span></li>',
+                    esc_html($g['name']),
+                    sprintf(esc_html__('named in %d answers you missed', 'geo-monitor'), (int) $g['count']));
+            }
+            echo '</ul>';
+        } else {
+            echo '<p class="geo-muted">' . esc_html__('No competitor gaps detected yet.', 'geo-monitor') . '</p>';
+        }
+        echo '</div>';
+
+        // Site readiness fixes (from the audit)
+        echo '<div class="geo-insight"><h3>' . esc_html__('Fix these to get recommended', 'geo-monitor') . '</h3>';
+        if (!empty($recs)) {
+            echo '<ul class="geo-recs">';
+            foreach ($recs as $r) {
+                $sev = isset($r['severity']) ? max(1, min(3, (int) $r['severity'])) : 2;
+                printf('<li class="geo-rec"><span class="sev s%d"></span><div><div class="t">%s</div><div class="d">%s</div></div></li>',
+                    $sev, esc_html($r['title']), esc_html($r['detail']));
+            }
+            echo '</ul>';
+        } else {
+            echo '<p class="geo-muted">' . esc_html__('No issues found in the latest audit — nice.', 'geo-monitor') . '</p>';
+        }
+        echo '</div></div>';
+    }
+
     private function action_form($action, $label, $style = 'ghost') {
         $cls = $style === 'primary' ? 'geo-btn-primary' : 'geo-btn-ghost';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
@@ -292,6 +410,14 @@ class Geo_Admin {
             update_option('geo_monitor_llms_txt', $res['content'], false);
         }
         $this->back('llms');
+    }
+
+    public function run_deep() {
+        $this->guard('geo_deep');
+        // Run the Action-Layer audit (robots.txt + schema) so the fix list is fresh.
+        $this->client->post('/api/v1/audit');
+        wp_safe_redirect(add_query_arg('geo_deep', '1', admin_url('admin.php?page=geo-monitor')));
+        exit;
     }
 
     public function upgrade() {

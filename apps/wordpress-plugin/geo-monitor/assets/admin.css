@@ -112,3 +112,35 @@
   .geo-grid { grid-template-columns: 1fr; }
   .geo-plans { grid-template-columns: 1fr; }
 }
+
+/* Locked (premium) engine rows */
+.geo-metrics tr.locked td { color: #9ca3af; }
+.geo-lock { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+.geo-lock .up { color: #4338ca; font-weight: 600; }
+
+/* Deep analysis */
+.geo-ribbon {
+  margin-left: 10px; background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff;
+  padding: 3px 10px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; vertical-align: middle;
+}
+.geo-deep-teaser { text-align: center; padding: 20px 10px 6px; }
+.geo-insight { margin: 0 0 22px; }
+.geo-insight:last-child { margin-bottom: 0; }
+.geo-insight h3 { font-size: 13px; font-weight: 700; color: #374151; margin: 0 0 12px; }
+.geo-sh { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; font-size: 14px; }
+.geo-sh .lbl { width: 170px; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.geo-sh .track { flex: 1; background: #f3f4f6; border-radius: 999px; height: 10px; position: relative; overflow: hidden; }
+.geo-sh .track > span { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.geo-sh .track > span.me { background: linear-gradient(90deg,#6366f1,#4338ca); }
+.geo-sh .track > span.them { background: #cbd5e1; }
+.geo-sh .val { width: 34px; text-align: right; color: #6b7280; font-variant-numeric: tabular-nums; }
+.geo-recs { list-style: none; margin: 0; padding: 0; }
+.geo-rec { display: flex; gap: 11px; padding: 12px 0; border-bottom: 1px solid #f3f4f6; }
+.geo-rec:last-child { border-bottom: none; }
+.geo-rec .sev { flex: none; width: 9px; height: 9px; border-radius: 50%; margin-top: 5px; }
+.geo-rec .sev.s1 { background: #dc2626; }
+.geo-rec .sev.s2 { background: #f59e0b; }
+.geo-rec .sev.s3 { background: #9ca3af; }
+.geo-rec .t { font-weight: 600; color: #111827; }
+.geo-rec .d { color: #6b7280; font-size: 13px; margin-top: 2px; }
