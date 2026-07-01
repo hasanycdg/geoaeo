@@ -57,8 +57,10 @@ services:
       dockerfile: apps/api/Dockerfile
     command: ["pnpm", "--filter", "@geo/api", "start"]
     env_file: .env
-    expose:
-      - "3000"
+    # Bound to localhost only: a host-level reverse proxy (nginx/Caddy) fronts
+    # this and terminates TLS for API_DOMAIN. Not published to the public IP.
+    ports:
+      - "127.0.0.1:3000:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,25 +84,10 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
-  # TLS termination + reverse proxy. Reads the domain from $API_DOMAIN (.env).
-  # Caddy fetches a Let's Encrypt cert automatically once DNS points here.
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - api-web
+# TLS + public routing is handled by the host's reverse proxy (see
+# deploy/nginx-api.conf), which proxies api.<domain> to 127.0.0.1:3000. This
+# server co-hosts other nginx sites, so the stack does not bind :80/:443 itself.
 
 volumes:
   pgdata:
   redisdata:
-  caddy_data:
-  caddy_config:
