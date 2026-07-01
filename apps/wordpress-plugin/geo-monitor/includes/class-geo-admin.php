@@ -176,6 +176,8 @@ class Geo_Admin {
             echo '<div class="geo-note ok">' . esc_html__('llms.txt generated and published.', 'geo-monitor') . '</div>';
         } elseif ($n === 'saved') {
             echo '<div class="geo-note ok">' . esc_html__('Saved.', 'geo-monitor') . '</div>';
+        } elseif ($n === 'billing_error') {
+            echo '<div class="geo-note warn">' . esc_html__('Paid plans aren’t available yet — billing is being set up. You’re on FREE for now.', 'geo-monitor') . '</div>';
         }
     }
 
@@ -431,6 +433,6 @@ class Geo_Admin {
             wp_redirect(esc_url_raw($res['url']));
             exit;
         }
-        $this->back();
+        $this->back('billing_error');
     }
 }

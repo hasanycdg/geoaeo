@@ -35,12 +35,18 @@ function planForPrice(priceId: string | undefined): Plan {
 
 export class StripeBillingAdapter implements BillingPort {
   readonly platform = "WORDPRESS" as const;
-  private readonly stripe: Stripe;
+  private _stripe?: Stripe;
 
-  constructor() {
-    const key = process.env.STRIPE_SECRET_KEY;
-    if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
-    this.stripe = new Stripe(key);
+  // Lazy: constructing this adapter must NOT require Stripe keys, because
+  // adaptersFor() builds it for every WordPress request (incl. llms.txt / product
+  // reads). The key is only needed when a billing method is actually called.
+  private get stripe(): Stripe {
+    if (!this._stripe) {
+      const key = process.env.STRIPE_SECRET_KEY;
+      if (!key) throw new Error("STRIPE_SECRET_KEY is not set");
+      this._stripe = new Stripe(key);
+    }
+    return this._stripe;
   }
 
   async createCheckout(tenant: Tenant, plan: Plan, returnUrl: string): Promise<CheckoutSession> {
