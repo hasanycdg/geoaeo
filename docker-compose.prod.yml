@@ -59,8 +59,10 @@ services:
     env_file: .env
     # Bound to localhost only: a host-level reverse proxy (nginx/Caddy) fronts
     # this and terminates TLS for API_DOMAIN. Not published to the public IP.
+    # Host port is configurable (API_HOST_PORT) to avoid clashes with co-hosted
+    # apps; keep deploy/nginx-api.conf's proxy_pass in sync with it.
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${API_HOST_PORT:-8770}:3000"
     depends_on:
       postgres:
         condition: service_healthy
