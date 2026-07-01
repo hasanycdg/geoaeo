@@ -21,7 +21,7 @@ if (!defined('ABSPATH')) {
 // Managed backend base URL. Override in wp-config.php with:
 //   define('GEO_BACKEND_URL', 'https://api.your-domain.com');
 if (!defined('GEO_BACKEND_URL')) {
-    define('GEO_BACKEND_URL', 'https://api.geo-monitor.app');
+    define('GEO_BACKEND_URL', 'https://api.getbrandradar.com');
 }
 
 define('GEO_MONITOR_VERSION', '1.0.0');

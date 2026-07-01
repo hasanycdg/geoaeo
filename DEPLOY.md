@@ -45,7 +45,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## Wiring the clients
 
-- **WordPress plugin**: default backend is `https://api.geo-monitor.app`. If your
+- **WordPress plugin**: default backend is `https://api.getbrandradar.com`. If your
   domain differs, set in `wp-config.php`:
   `define('GEO_BACKEND_URL', 'https://api.<your-domain>');`
 - **Shopify app**: set `GEO_API_URL=https://api.<your-domain>` and the SAME
