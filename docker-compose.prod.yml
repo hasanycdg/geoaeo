@@ -1,0 +1,106 @@
+# Production stack for the GEO backend (backend-only: no Shopify app here).
+#
+#   Caddy (TLS) ──► api-web:3000
+#   api-worker ───► Redis + Postgres   (BullMQ jobs, all LLM calls)
+#   migrate (one-shot) runs `prisma migrate deploy` before the API starts.
+#
+# Deploy on the server:
+#   cp .env.prod.example .env   # then fill in real values
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# The api-web and api-worker services share ONE image (built once, reused).
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-geo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-geo_monitor}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-geo} -d ${POSTGRES_DB:-geo_monitor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: apply migrations, then exit. api-web waits for this to succeed.
+  migrate:
+    image: geo-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["pnpm", "--filter", "@geo/db", "migrate"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api-web:
+    image: geo-api:latest
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["pnpm", "--filter", "@geo/api", "start"]
+    env_file: .env
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  api-worker:
+    image: geo-api:latest
+    # No build here — reuses the image built by api-web/migrate.
+    command: ["pnpm", "--filter", "@geo/api", "worker"]
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # TLS termination + reverse proxy. Reads the domain from $API_DOMAIN (.env).
+  # Caddy fetches a Let's Encrypt cert automatically once DNS points here.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      API_DOMAIN: ${API_DOMAIN:?set API_DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api-web
+
+volumes:
+  pgdata:
+  redisdata:
+  caddy_data:
+  caddy_config:

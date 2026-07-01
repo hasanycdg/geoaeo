@@ -1,0 +1,8 @@
+# Caddy reverse proxy for the GEO API.
+# API_DOMAIN is injected from .env (e.g. api.geo-monitor.app). Once your DNS
+# A-record points this name at the server, Caddy provisions a Let's Encrypt
+# cert automatically — no manual certbot.
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api-web:3000
+}
