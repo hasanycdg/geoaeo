@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin UI. Renders the dashboard + config, delegating all logic to the backend.
+ * Admin UI. Card-based dashboard; all logic is delegated to the backend.
  */
 
 if (!defined('ABSPATH')) {
@@ -14,6 +14,7 @@ class Geo_Admin {
     public function __construct() {
         $this->client = new Geo_Client();
         add_action('admin_menu', array($this, 'menu'));
+        add_action('admin_enqueue_scripts', array($this, 'assets'));
         add_action('admin_post_geo_save_brand', array($this, 'save_brand'));
         add_action('admin_post_geo_add_prompt', array($this, 'add_prompt'));
         add_action('admin_post_geo_delete_prompt', array($this, 'delete_prompt'));
@@ -28,6 +29,13 @@ class Geo_Admin {
         add_menu_page('GEO Monitor', 'GEO Monitor', 'manage_options', 'geo-monitor', array($this, 'render'), 'dashicons-visibility', 58);
     }
 
+    public function assets($hook) {
+        if ($hook !== 'toplevel_page_geo-monitor') {
+            return;
+        }
+        wp_enqueue_style('geo-monitor-admin', GEO_MONITOR_URL . 'assets/admin.css', array(), GEO_MONITOR_VERSION);
+    }
+
     private function ensure_provisioned() {
         if (!get_option('geo_monitor_api_key')) {
             Geo_Provisioning::provision();
@@ -35,11 +43,22 @@ class Geo_Admin {
         return (bool) get_option('geo_monitor_api_key');
     }
 
+    private function header($plan = null) {
+        echo '<div class="geo-header"><span class="geo-logo">📡</span><div><h1>GEO Monitor</h1>';
+        echo '<span class="geo-sub">' . esc_html__('See how AI assistants recommend your store', 'geo-monitor') . '</span></div>';
+        if ($plan !== null) {
+            printf('<span class="geo-plan">%s</span>', esc_html($plan));
+        }
+        echo '</div>';
+    }
+
     public function render() {
         if (!$this->ensure_provisioned()) {
-            echo '<div class="wrap"><h1>GEO Monitor</h1><div class="notice notice-error"><p>' .
-                esc_html__('Could not connect to the GEO backend. Make sure this site is publicly reachable (the backend fetches /?geo_verify=1 to confirm ownership).', 'geo-monitor') .
-                '</p></div></div>';
+            echo '<div class="wrap geo-wrap">';
+            $this->header();
+            echo '<div class="geo-note warn">' .
+                esc_html__('Could not connect to the GEO backend. Make sure this site is publicly reachable — the backend fetches /?geo_verify=1 to confirm ownership.', 'geo-monitor') .
+                '</div></div>';
             return;
         }
 
@@ -48,114 +67,164 @@ class Geo_Admin {
         $t = (!is_wp_error($tenant) && isset($tenant['tenant'])) ? $tenant['tenant'] : array();
         $limits = (!is_wp_error($tenant) && isset($tenant['limits'])) ? $tenant['limits'] : array();
 
-        echo '<div class="wrap"><h1>GEO Monitor</h1>';
-        printf('<p><strong>%s:</strong> %s</p>', esc_html__('Plan', 'geo-monitor'), esc_html(isset($t['plan']) ? $t['plan'] : 'FREE'));
+        $plan        = isset($t['plan']) ? $t['plan'] : 'FREE';
+        $brand       = isset($t['brandName']) ? $t['brandName'] : '';
+        $domain      = isset($t['primaryDomain']) ? $t['primaryDomain'] : '';
+        $prompts     = !empty($t['prompts']) ? $t['prompts'] : array();
+        $competitors = !empty($t['competitors']) ? $t['competitors'] : array();
 
-        // Dashboard
-        echo '<h2>' . esc_html__('AI Visibility', 'geo-monitor') . '</h2>';
+        echo '<div class="wrap geo-wrap">';
+        $this->header($plan);
+        $this->notices();
+        echo '<div class="geo-grid">';
+
+        // --- AI Visibility ---------------------------------------------------
+        echo '<div class="geo-card span2"><h2>' . esc_html__('AI Visibility', 'geo-monitor') . '</h2>';
         if (is_wp_error($dash) || empty($dash['hasData'])) {
-            echo '<p>' . esc_html__('No scans yet. Add a prompt and run a scan.', 'geo-monitor') . '</p>';
+            echo '<div class="geo-empty"><span class="geo-emoji">📡</span><p><strong>' .
+                esc_html__('No scans yet.', 'geo-monitor') . '</strong></p>';
+            if (!$brand) {
+                echo '<p class="geo-muted">' . esc_html__('Set your brand name and add a prompt, then run a scan.', 'geo-monitor') . '</p>';
+            } elseif (!$prompts) {
+                echo '<p class="geo-muted">' . esc_html__('Add at least one prompt, then run a scan.', 'geo-monitor') . '</p>';
+            }
+            echo '</div>';
         } else {
-            echo '<table class="widefat striped"><thead><tr><th>Engine</th><th>Mention rate</th><th>Avg. position</th><th>Sentiment</th></tr></thead><tbody>';
+            echo '<table class="geo-metrics"><thead><tr><th>' . esc_html__('Engine', 'geo-monitor') . '</th><th>' .
+                esc_html__('Mention rate', 'geo-monitor') . '</th><th>' . esc_html__('Avg. position', 'geo-monitor') .
+                '</th><th>' . esc_html__('Sentiment', 'geo-monitor') . '</th></tr></thead><tbody>';
             foreach ($dash['providers'] as $p) {
+                $rate = (int) round($p['mentionRate'] * 100);
+                $sent = strtoupper((string) $p['sentiment']);
+                $cls  = $sent === 'POSITIVE' ? 'pos' : ($sent === 'NEGATIVE' ? 'neg' : 'neu');
                 printf(
-                    '<tr><td>%s</td><td>%d%%</td><td>%s</td><td>%s</td></tr>',
-                    esc_html($p['provider']),
-                    (int) round($p['mentionRate'] * 100),
+                    '<tr><td class="geo-engine">%s</td>' .
+                    '<td><div class="geo-row" style="gap:10px"><span class="geo-bar"><span style="width:%d%%"></span></span><span>%d%%</span></div></td>' .
+                    '<td>%s</td><td><span class="geo-badge %s">%s</span></td></tr>',
+                    esc_html($p['provider']), $rate, $rate,
                     esc_html($p['avgPosition'] !== null ? number_format($p['avgPosition'], 1) : '—'),
-                    esc_html($p['sentiment'])
+                    esc_attr($cls), esc_html($sent)
                 );
             }
             echo '</tbody></table>';
         }
+        echo '<div style="margin-top:18px">';
+        $this->action_form('geo_scan', __('Run scan now', 'geo-monitor'), 'primary');
+        echo '<p class="geo-muted" style="margin-top:10px">' .
+            esc_html__('Scans run in the background (~15–30s). Reload the page to see results.', 'geo-monitor') . '</p>';
+        echo '</div></div>';
 
-        $this->render_form('geo_scan', __('Run scan now', 'geo-monitor'));
-
-        // Brand settings
-        echo '<h2>' . esc_html__('Brand', 'geo-monitor') . '</h2>';
+        // --- Brand -----------------------------------------------------------
+        echo '<div class="geo-card"><h2>' . esc_html__('Brand', 'geo-monitor') . '</h2>';
         echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
         wp_nonce_field('geo_save_brand');
         echo '<input type="hidden" name="action" value="geo_save_brand" />';
-        printf('<p><label>%s<br><input type="text" name="brandName" value="%s" class="regular-text" /></label></p>',
-            esc_html__('Brand name', 'geo-monitor'), esc_attr(isset($t['brandName']) ? $t['brandName'] : ''));
-        printf('<p><label>%s<br><input type="text" name="primaryDomain" value="%s" class="regular-text" placeholder="example.com" /></label></p>',
-            esc_html__('Primary domain', 'geo-monitor'), esc_attr(isset($t['primaryDomain']) ? $t['primaryDomain'] : ''));
-        submit_button(__('Save brand', 'geo-monitor'));
-        echo '</form>';
+        echo '<div class="geo-field"><label>' . esc_html__('Brand name', 'geo-monitor') . '</label>' .
+            '<input class="geo-input" type="text" name="brandName" value="' . esc_attr($brand) . '" placeholder="Jungbrunn" /></div>';
+        echo '<div class="geo-field"><label>' . esc_html__('Primary domain', 'geo-monitor') . '</label>' .
+            '<input class="geo-input" type="text" name="primaryDomain" value="' . esc_attr($domain) . '" placeholder="example.com" /></div>';
+        echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html__('Save brand', 'geo-monitor') . '</button>';
+        echo '</form></div>';
 
-        // Prompts
-        echo '<h2>' . esc_html__('Tracked prompts', 'geo-monitor') . '</h2>';
-        if (!empty($t['prompts'])) {
-            echo '<ul>';
-            foreach ($t['prompts'] as $p) {
-                echo '<li>' . esc_html($p['text']) . ' ';
+        // --- Prompts ---------------------------------------------------------
+        echo '<div class="geo-card"><h2>' . esc_html__('Tracked prompts', 'geo-monitor') . '</h2>';
+        echo '<p class="geo-hint">' . esc_html__('Questions people ask AI assistants where your brand should show up.', 'geo-monitor') . '</p>';
+        if ($prompts) {
+            echo '<ul class="geo-chips">';
+            foreach ($prompts as $p) {
+                echo '<li class="geo-chip"><span>' . esc_html($p['text']) . '</span>';
                 $this->inline_delete('geo_delete_prompt', $p['id'], 'promptId');
                 echo '</li>';
             }
             echo '</ul>';
         }
         $maxPrompts = isset($limits['maxPrompts']) ? (int) $limits['maxPrompts'] : 1;
-        if (empty($t['prompts']) || count($t['prompts']) < $maxPrompts) {
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        if (!$prompts || count($prompts) < $maxPrompts) {
+            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><div class="geo-row">';
             wp_nonce_field('geo_add_prompt');
             echo '<input type="hidden" name="action" value="geo_add_prompt" />';
-            echo '<input type="text" name="text" class="regular-text" placeholder="best vegan protein powder" /> ';
-            submit_button(__('Add prompt', 'geo-monitor'), 'secondary', 'submit', false);
-            echo '</form>';
+            echo '<input class="geo-input" type="text" name="text" placeholder="best vegan protein powder" />';
+            echo '<button type="submit" class="geo-btn geo-btn-ghost">' . esc_html__('Add prompt', 'geo-monitor') . '</button>';
+            echo '</div></form>';
         } else {
-            printf('<p><em>%s</em></p>', esc_html__('Prompt limit reached for your plan.', 'geo-monitor'));
+            echo '<p class="geo-muted">' . esc_html__('Prompt limit reached for your plan.', 'geo-monitor') . '</p>';
         }
+        echo '</div>';
 
-        // Competitors
-        echo '<h2>' . esc_html__('Competitors', 'geo-monitor') . '</h2>';
-        if (!empty($t['competitors'])) {
-            echo '<ul>';
-            foreach ($t['competitors'] as $comp) {
-                echo '<li>' . esc_html($comp['name']) . ' ';
+        // --- Competitors -----------------------------------------------------
+        echo '<div class="geo-card"><h2>' . esc_html__('Competitors', 'geo-monitor') . '</h2>';
+        echo '<p class="geo-hint">' . esc_html__('Brands to compare against in AI answers.', 'geo-monitor') . '</p>';
+        if ($competitors) {
+            echo '<ul class="geo-chips">';
+            foreach ($competitors as $comp) {
+                echo '<li class="geo-chip"><span>' . esc_html($comp['name']) . '</span>';
                 $this->inline_delete('geo_delete_competitor', $comp['id'], 'competitorId');
                 echo '</li>';
             }
             echo '</ul>';
         }
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '"><div class="geo-row">';
         wp_nonce_field('geo_add_competitor');
         echo '<input type="hidden" name="action" value="geo_add_competitor" />';
-        echo '<input type="text" name="name" class="regular-text" placeholder="Competitor brand" /> ';
-        submit_button(__('Add competitor', 'geo-monitor'), 'secondary', 'submit', false);
-        echo '</form>';
+        echo '<input class="geo-input" type="text" name="name" placeholder="Competitor brand" />';
+        echo '<button type="submit" class="geo-btn geo-btn-ghost">' . esc_html__('Add competitor', 'geo-monitor') . '</button>';
+        echo '</div></form></div>';
 
-        // Content
-        echo '<h2>' . esc_html__('AI content', 'geo-monitor') . '</h2>';
-        $this->render_form('geo_generate_llms', __('Generate & publish llms.txt', 'geo-monitor'));
-        printf('<p><a href="%s" target="_blank">%s</a></p>', esc_url(home_url('/llms.txt')), esc_html__('View llms.txt', 'geo-monitor'));
+        // --- AI content ------------------------------------------------------
+        echo '<div class="geo-card"><h2>' . esc_html__('AI content', 'geo-monitor') . '</h2>';
+        echo '<p class="geo-hint">' . esc_html__('Publish an llms.txt so AI crawlers understand what your site offers.', 'geo-monitor') . '</p>';
+        echo '<div class="geo-row">';
+        $this->action_form('geo_generate_llms', __('Generate llms.txt', 'geo-monitor'), 'primary');
+        echo '<a class="geo-btn geo-btn-ghost" href="' . esc_url(home_url('/llms.txt')) . '" target="_blank" rel="noopener">' .
+            esc_html__('View llms.txt', 'geo-monitor') . '</a>';
+        echo '</div></div>';
 
-        // Billing
-        echo '<h2>' . esc_html__('Upgrade', 'geo-monitor') . '</h2>';
-        foreach (array('STARTER', 'GROWTH', 'PRO') as $plan) {
-            echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline-block;margin-right:8px;">';
-            wp_nonce_field('geo_upgrade');
-            echo '<input type="hidden" name="action" value="geo_upgrade" />';
-            echo '<input type="hidden" name="plan" value="' . esc_attr($plan) . '" />';
-            submit_button(sprintf(__('Upgrade to %s', 'geo-monitor'), $plan), 'primary', 'submit', false);
-            echo '</form>';
+        // --- Upgrade ---------------------------------------------------------
+        echo '<div class="geo-card span2"><h2>' . esc_html__('Upgrade', 'geo-monitor') . '</h2><div class="geo-plans">';
+        foreach (array('STARTER', 'GROWTH', 'PRO') as $pl) {
+            echo '<div class="geo-plan-card"><div class="name">' . esc_html($pl) . '</div>';
+            if ($plan === $pl) {
+                echo '<button type="button" class="geo-btn geo-btn-ghost" disabled>' . esc_html__('Current plan', 'geo-monitor') . '</button>';
+            } else {
+                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                wp_nonce_field('geo_upgrade');
+                echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pl) . '" />';
+                echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html(sprintf(__('Choose %s', 'geo-monitor'), $pl)) . '</button>';
+                echo '</form>';
+            }
+            echo '</div>';
         }
-        echo '</div>';
+        echo '</div></div>';
+
+        echo '</div></div>'; // .geo-grid, .wrap
     }
 
-    private function render_form($action, $label) {
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+    private function notices() {
+        $n = isset($_GET['geo_notice']) ? sanitize_key(wp_unslash($_GET['geo_notice'])) : '';
+        if ($n === 'scan') {
+            echo '<div class="geo-note info">' . esc_html__('Scan started — results appear in ~15–30s. Reload this page.', 'geo-monitor') . '</div>';
+        } elseif ($n === 'llms') {
+            echo '<div class="geo-note ok">' . esc_html__('llms.txt generated and published.', 'geo-monitor') . '</div>';
+        } elseif ($n === 'saved') {
+            echo '<div class="geo-note ok">' . esc_html__('Saved.', 'geo-monitor') . '</div>';
+        }
+    }
+
+    private function action_form($action, $label, $style = 'ghost') {
+        $cls = $style === 'primary' ? 'geo-btn-primary' : 'geo-btn-ghost';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
         wp_nonce_field($action);
         echo '<input type="hidden" name="action" value="' . esc_attr($action) . '" />';
-        submit_button($label, 'secondary', 'submit', false);
+        echo '<button type="submit" class="geo-btn ' . esc_attr($cls) . '">' . esc_html($label) . '</button>';
         echo '</form>';
     }
 
     private function inline_delete($action, $id, $field) {
-        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="display:inline">';
+        echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" style="margin:0">';
         wp_nonce_field($action);
         echo '<input type="hidden" name="action" value="' . esc_attr($action) . '" />';
         echo '<input type="hidden" name="' . esc_attr($field) . '" value="' . esc_attr($id) . '" />';
-        submit_button(__('Delete', 'geo-monitor'), 'link-delete', 'submit', false);
+        echo '<button type="submit" class="geo-btn geo-btn-link">' . esc_html__('Remove', 'geo-monitor') . '</button>';
         echo '</form>';
     }
 
@@ -166,8 +235,12 @@ class Geo_Admin {
         check_admin_referer($action);
     }
 
-    private function back() {
-        wp_safe_redirect(admin_url('admin.php?page=geo-monitor'));
+    private function back($notice = '') {
+        $url = admin_url('admin.php?page=geo-monitor');
+        if ($notice) {
+            $url = add_query_arg('geo_notice', $notice, $url);
+        }
+        wp_safe_redirect($url);
         exit;
     }
 
@@ -177,13 +250,13 @@ class Geo_Admin {
             'brandName'     => sanitize_text_field(wp_unslash($_POST['brandName'] ?? '')),
             'primaryDomain' => sanitize_text_field(wp_unslash($_POST['primaryDomain'] ?? '')),
         ));
-        $this->back();
+        $this->back('saved');
     }
 
     public function add_prompt() {
         $this->guard('geo_add_prompt');
         $this->client->post('/api/v1/prompts', array('text' => sanitize_text_field(wp_unslash($_POST['text'] ?? ''))));
-        $this->back();
+        $this->back('saved');
     }
 
     public function delete_prompt() {
@@ -195,7 +268,7 @@ class Geo_Admin {
     public function add_competitor() {
         $this->guard('geo_add_competitor');
         $this->client->post('/api/v1/competitors', array('name' => sanitize_text_field(wp_unslash($_POST['name'] ?? ''))));
-        $this->back();
+        $this->back('saved');
     }
 
     public function delete_competitor() {
@@ -208,7 +281,7 @@ class Geo_Admin {
         $this->guard('geo_scan');
         Geo_Sync::push(); // send the latest catalog before scanning
         $this->client->post('/api/v1/scan');
-        $this->back();
+        $this->back('scan');
     }
 
     public function generate_llms() {
@@ -218,7 +291,7 @@ class Geo_Admin {
         if (!is_wp_error($res) && !empty($res['content'])) {
             update_option('geo_monitor_llms_txt', $res['content'], false);
         }
-        $this->back();
+        $this->back('llms');
     }
 
     public function upgrade() {

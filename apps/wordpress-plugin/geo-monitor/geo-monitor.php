@@ -27,6 +27,7 @@ if (!defined('GEO_BACKEND_URL')) {
 
 define('GEO_MONITOR_VERSION', '1.1.0');
 define('GEO_MONITOR_DIR', plugin_dir_path(__FILE__));
+define('GEO_MONITOR_URL', plugin_dir_url(__FILE__));
 
 require_once GEO_MONITOR_DIR . 'includes/class-geo-client.php';
 require_once GEO_MONITOR_DIR . 'includes/class-geo-sync.php';
