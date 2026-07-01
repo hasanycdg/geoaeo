@@ -1,0 +1,79 @@
+# Local development infrastructure for GEO Monitor.
+# Postgres = app data + Shopify session storage. Redis = BullMQ job queue.
+# Production hosting (Fly/Railway/Render) provisions these as managed services;
+# this file is for local dev only.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: geo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: geo
+      POSTGRES_PASSWORD: geo
+      POSTGRES_DB: geo_monitor
+    ports:
+      - "5432:5432"
+    volumes:
+      - geo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geo -d geo_monitor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: geo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - geo_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # --- Local WordPress for testing the geo-monitor plugin --------------------
+  # The plugin dir is mounted read-only into wp-content/plugins. Activate it in
+  # wp-admin; it self-provisions against the host's api service (GEO_BACKEND_URL).
+  wp-db:
+    image: mariadb:11
+    container_name: geo-wp-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: wordpress
+      MYSQL_USER: wp
+      MYSQL_PASSWORD: wp
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - geo_wpdbdata:/var/lib/mysql
+
+  wordpress:
+    image: wordpress:6-php8.2-apache
+    container_name: geo-wordpress
+    restart: unless-stopped
+    depends_on:
+      - wp-db
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: wp-db
+      WORDPRESS_DB_USER: wp
+      WORDPRESS_DB_PASSWORD: wp
+      WORDPRESS_DB_NAME: wordpress
+      # Point the plugin at the API running on the host (macOS: host.docker.internal).
+      WORDPRESS_CONFIG_EXTRA: |
+        define('GEO_BACKEND_URL', 'http://host.docker.internal:3000');
+    volumes:
+      - geo_wpdata:/var/www/html
+      - ./apps/wordpress-plugin/geo-monitor:/var/www/html/wp-content/plugins/geo-monitor:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  geo_pgdata:
+  geo_redisdata:
+  geo_wpdbdata:
+  geo_wpdata:

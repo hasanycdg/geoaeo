@@ -1,0 +1,21 @@
+{
+  "name": "@geo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "worker": "tsx src/worker.ts"
+  },
+  "dependencies": {
+    "@geo/core": "workspace:*",
+    "@geo/db": "workspace:*",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "stripe": "^17.5.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
+  }
+}

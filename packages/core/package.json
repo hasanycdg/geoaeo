@@ -1,0 +1,26 @@
+{
+  "name": "@geo/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ports": "./ports/index.ts",
+    "./domain/*": "./domain/*.ts",
+    "./config/*": "./config/*.ts",
+    "./providers": "./providers/index.ts",
+    "./scan": "./scan/index.ts",
+    "./analysis": "./analysis/index.ts",
+    "./audit": "./audit/index.ts",
+    "./content": "./content/index.ts",
+    "./models": "./models/index.ts",
+    "./billing": "./billing/index.ts",
+    "./queue": "./queue/index.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "@geo/db": "workspace:*",
+    "bullmq": "^5.79.2",
+    "ioredis": "^5.11.1",
+    "openai": "^6.45.0"
+  }
+}

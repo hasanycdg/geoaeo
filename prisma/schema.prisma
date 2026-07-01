@@ -1,0 +1,269 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Shopify session storage. Managed by @shopify/shopify-app-session-storage-prisma.
+// Holds the offline/online access tokens — do NOT duplicate tokens elsewhere.
+// ---------------------------------------------------------------------------
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ===========================================================================
+// GEO Monitor domain model
+// ===========================================================================
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum Provider {
+  OPENAI // ChatGPT (Responses API + web_search)
+  ANTHROPIC // Claude (Messages API + web_search tool)
+  GEMINI // Google (generateContent + Google Search grounding)
+  PERPLEXITY // sonar online models
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+  UNKNOWN
+}
+
+enum RecommendationType {
+  ROBOTS_TXT // AI crawler blocked in robots.txt
+  SCHEMA // JSON-LD / structured data gap
+  LLMS_TXT // llms.txt missing/outdated (post-MVP)
+  PRODUCT_COPY // conversational product description (post-MVP)
+}
+
+enum RecommendationStatus {
+  OPEN
+  DONE
+  DISMISSED
+}
+
+enum AlertType {
+  VISIBILITY_DROP
+  VISIBILITY_RISE
+  COMPETITOR_OVERTAKE
+  QUOTA_REACHED
+}
+
+// One row per installed shop. The natural tenant key is the myshopify domain.
+// Plan *limits* live in code config (app/config/plans.ts), not here — only the
+// chosen plan and live usage counters are persisted.
+model Shop {
+  id                     String   @id @default(cuid())
+  domain                 String   @unique // foo.myshopify.com
+  plan                   Plan     @default(FREE)
+  billingSubscriptionId  String? // Shopify Billing API subscription GID
+
+  // Brand identity used to match the shop in LLM answers.
+  brandName              String?
+  brandAliases           String[] @default([]) // alternate spellings / store name
+  primaryDomain          String? // custom storefront domain, for own-vs-3rd-party citation detection
+
+  // Defaults applied to new tracked prompts.
+  defaultLocale          String   @default("en-US")
+  defaultCountry         String   @default("US")
+
+  // Usage accounting for quota throttling. Reset each billing period.
+  usageQueriesThisPeriod Int      @default(0)
+  usagePeriodStart       DateTime @default(now())
+
+  // Cached llms.txt (generated from the catalog; served live via app proxy).
+  llmsTxt            String?
+  llmsTxtGeneratedAt DateTime?
+
+  // Worker-health: surface silent scan failures in the UI.
+  lastScanCompletedAt DateTime?
+  lastScanError       String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  prompts         TrackedPrompt[]
+  competitors     Competitor[]
+  runs            Run[]
+  recommendations Recommendation[]
+  alerts          Alert[]
+}
+
+// A search query the merchant monitors, e.g. "best vegan protein powder".
+model TrackedPrompt {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  text      String
+  locale    String   @default("en-US") // language tag
+  country   String   @default("US") // ISO country for geo-relevant grounding
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs Run[]
+
+  @@index([shopId, isActive])
+}
+
+// A competitor brand to compare against (share-of-model).
+model Competitor {
+  id        String   @id @default(cuid())
+  shopId    String
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  name      String
+  aliases   String[] @default([])
+  domain    String?
+  createdAt DateTime @default(now())
+
+  @@unique([shopId, name])
+  @@index([shopId])
+}
+
+// A single grounded API call: one (prompt x model x repetition).
+// The N repetitions of one scheduled execution share a `batchId`.
+model Run {
+  id          String        @id @default(cuid())
+  shopId      String
+  shop        Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  promptId    String
+  prompt      TrackedPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  provider    Provider
+  modelId     String // concrete model id used (e.g. "sonar", "gpt-4.1") — IDs drift, so store it
+  batchId     String // groups the N repetitions of one scheduled run
+  runIndex    Int    @default(0) // 0..N-1 within the batch
+
+  status      RunStatus @default(PENDING)
+  rawResponse String? // full grounded answer text
+  citations   Json? // [{ url, title }] normalized across providers
+  error       String?
+
+  // Cost/diagnostics.
+  promptTokens     Int?
+  completionTokens Int?
+  costUsd          Float?
+
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  result Result?
+
+  @@index([shopId, completedAt])
+  @@index([promptId, provider, completedAt])
+  @@index([batchId])
+}
+
+// Evaluation of one Run. Produced by the cheap analysis step (string match /
+// small model), never by the expensive grounded model.
+model Result {
+  id                 String    @id @default(cuid())
+  runId              String    @unique
+  run                Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  brandMentioned     Boolean   @default(false)
+  position           Int? // 1-based rank/order of first brand mention in the answer
+  prominence         Float? // 0..1 normalized prominence (earlier/more = higher)
+  sentiment          Sentiment @default(UNKNOWN)
+  citedUrl           String? // primary URL the answer attributes to the brand
+  citedOwnDomain     Boolean   @default(false) // citation points at the shop's own domain
+
+  // Competitor mentions kept as structured JSON for MVP (read-time aggregation).
+  // Shape: [{ name, mentioned, position }]
+  competitorMentions Json?
+
+  createdAt          DateTime  @default(now())
+
+  // Product/SKU level — schema reserved now, populated post-MVP.
+  productMentions ProductMention[]
+
+  @@index([runId])
+}
+
+// Product/SKU-level mention extracted from an answer (post-MVP populate).
+// The e-commerce differentiator: which concrete product the AI recommended.
+model ProductMention {
+  id                String   @id @default(cuid())
+  resultId          String
+  result            Result   @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  productTitle      String
+  sku               String?
+  shopifyProductId  String? // gid://shopify/Product/... when matched to own catalog
+  matchedOwnCatalog Boolean  @default(false)
+  competitorName    String? // set when the product belongs to a competitor
+  position          Int?
+
+  @@index([resultId])
+}
+
+// Action-layer output: a concrete to-do that improves AI visibility.
+model Recommendation {
+  id        String               @id @default(cuid())
+  shopId    String
+  shop      Shop                 @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type      RecommendationType
+  status    RecommendationStatus @default(OPEN)
+  severity  Int                  @default(2) // 1=critical .. 3=minor
+  title     String
+  detail    String // human-readable explanation + fix
+  data      Json? // structured payload (e.g. blocked bots, missing schema fields)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([shopId, status])
+}
+
+// Notification on a significant visibility change.
+model Alert {
+  id        String    @id @default(cuid())
+  shopId    String
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  type      AlertType
+  message   String
+  data      Json?
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([shopId, isRead])
+}

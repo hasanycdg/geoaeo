@@ -1,0 +1,281 @@
+// @geo/db — the single database for ALL platforms (Shopify + WordPress + future).
+// The tenant is platform-neutral; platform-specific access lives behind adapters
+// in apps/api, never in the schema.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Shopify session storage. Managed by @shopify/shopify-app-session-storage-prisma
+// inside apps/shopify-app. WordPress does NOT use this table.
+// ---------------------------------------------------------------------------
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+// ===========================================================================
+// GEO Monitor domain model — platform-neutral
+// ===========================================================================
+
+enum Platform {
+  SHOPIFY
+  WORDPRESS
+}
+
+enum Plan {
+  FREE
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum Provider {
+  OPENAI
+  ANTHROPIC
+  GEMINI
+  PERPLEXITY
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum Sentiment {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+  MIXED
+  UNKNOWN
+}
+
+enum RecommendationType {
+  ROBOTS_TXT
+  SCHEMA
+  LLMS_TXT
+  PRODUCT_COPY
+}
+
+enum RecommendationStatus {
+  OPEN
+  DONE
+  DISMISSED
+}
+
+enum AlertType {
+  VISIBILITY_DROP
+  VISIBILITY_RISE
+  COMPETITOR_OVERTAKE
+  QUOTA_REACHED
+}
+
+// One row per installed site, on any platform. Identified by (platform, externalId):
+//   SHOPIFY   → externalId = myshopify domain ("foo.myshopify.com")
+//   WORDPRESS → externalId = site URL ("https://shop.example.com")
+model Tenant {
+  id         String   @id @default(cuid())
+  platform   Platform
+  externalId String
+
+  plan Plan @default(FREE)
+
+  // Opaque billing reference, interpreted by the platform's BillingPort:
+  //   SHOPIFY   → AppSubscription GID
+  //   WORDPRESS → Stripe subscription id
+  billingRef        String?
+  billingCustomerId String? // Stripe customer id; null under Shopify managed billing
+
+  // Brand identity used to match the tenant in LLM answers.
+  brandName     String?
+  brandAliases  String[] @default([])
+  primaryDomain String? // custom storefront domain, for own-vs-3rd-party citation detection
+
+  // Defaults applied to new tracked prompts.
+  defaultLocale  String @default("en-US")
+  defaultCountry String @default("US")
+
+  // Usage accounting for quota throttling. Reset each billing period.
+  usageQueriesThisPeriod Int      @default(0)
+  usagePeriodStart       DateTime @default(now())
+
+  // Cached llms.txt (generated from the catalog; served live per platform).
+  llmsTxt            String?
+  llmsTxtGeneratedAt DateTime?
+
+  // Worker-health: surface silent scan failures in the UI.
+  lastScanCompletedAt DateTime?
+  lastScanError       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  credentials     TenantCredential?
+  prompts         TrackedPrompt[]
+  competitors     Competitor[]
+  runs            Run[]
+  recommendations Recommendation[]
+  alerts          Alert[]
+
+  @@unique([platform, externalId])
+}
+
+// Platform access secret, kept separate from the tenant profile:
+//   SHOPIFY   → offline access token (lets the worker call Admin GraphQL without a live session)
+//   WORDPRESS → application password / API key issued to the plugin
+model TenantCredential {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  secret   String
+  meta     Json? // e.g. { scope, restBase, apiKeyHash }
+  updatedAt DateTime @updatedAt
+}
+
+model TrackedPrompt {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  text      String
+  locale    String   @default("en-US")
+  country   String   @default("US")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs Run[]
+
+  @@index([tenantId, isActive])
+}
+
+model Competitor {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  aliases   String[] @default([])
+  domain    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Run {
+  id       String        @id @default(cuid())
+  tenantId String
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promptId String
+  prompt   TrackedPrompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  provider Provider
+  modelId  String
+  batchId  String
+  runIndex Int    @default(0)
+
+  status      RunStatus @default(PENDING)
+  rawResponse String?
+  citations   Json?
+  error       String?
+
+  promptTokens     Int?
+  completionTokens Int?
+  costUsd          Float?
+
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+
+  result Result?
+
+  @@index([tenantId, completedAt])
+  @@index([promptId, provider, completedAt])
+  @@index([batchId])
+}
+
+model Result {
+  id    String @id @default(cuid())
+  runId String @unique
+  run   Run    @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  brandMentioned Boolean   @default(false)
+  position       Int?
+  prominence     Float?
+  sentiment      Sentiment @default(UNKNOWN)
+  citedUrl       String?
+  citedOwnDomain Boolean   @default(false)
+
+  competitorMentions Json?
+
+  createdAt DateTime @default(now())
+
+  productMentions ProductMention[]
+
+  @@index([runId])
+}
+
+model ProductMention {
+  id                String   @id @default(cuid())
+  resultId          String
+  result            Result   @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  productTitle      String
+  sku               String?
+  externalProductId String? // Shopify product GID / WP product id when matched to own catalog
+  matchedOwnCatalog Boolean  @default(false)
+  competitorName    String?
+  position          Int?
+
+  @@index([resultId])
+}
+
+model Recommendation {
+  id        String               @id @default(cuid())
+  tenantId  String
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      RecommendationType
+  status    RecommendationStatus @default(OPEN)
+  severity  Int                  @default(2)
+  title     String
+  detail    String
+  data      Json?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([tenantId, status])
+}
+
+model Alert {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      AlertType
+  message   String
+  data      Json?
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, isRead])
+}
