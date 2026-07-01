@@ -64,8 +64,11 @@ services:
       WORDPRESS_DB_PASSWORD: wp
       WORDPRESS_DB_NAME: wordpress
       # Point the plugin at the API running on the host (macOS: host.docker.internal).
+      # WP_ENVIRONMENT_TYPE=local lets Application Password auth work over plain
+      # HTTP (WP otherwise rejects it without SSL), so plugin self-provisioning works.
       WORDPRESS_CONFIG_EXTRA: |
         define('GEO_BACKEND_URL', 'http://host.docker.internal:3000');
+        define('WP_ENVIRONMENT_TYPE', 'local');
     volumes:
       - geo_wpdata:/var/www/html
       - ./apps/wordpress-plugin/geo-monitor:/var/www/html/wp-content/plugins/geo-monitor:ro
