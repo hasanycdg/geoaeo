@@ -24,6 +24,10 @@ export default function App() {
         <Link to="/app" rel="home">
           Dashboard
         </Link>
+        <Link to="/app/deep-scan">Deep Scan</Link>
+        <Link to="/app/deep">Deep analysis</Link>
+        <Link to="/app/answers">AI answers</Link>
+        <Link to="/app/trends">Trends</Link>
         <Link to="/app/improve">Improve</Link>
         <Link to="/app/content">AI content</Link>
         <Link to="/app/settings">Setup</Link>

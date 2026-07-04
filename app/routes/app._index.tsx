@@ -95,28 +95,17 @@ export default function Dashboard() {
   }
 
   const quotaPct = plan.monthlyQueryQuota ? Math.min(100, (usage / plan.monthlyQueryQuota) * 100) : 0;
+  const overall = dashboard.providers.length
+    ? Math.round((dashboard.providers.reduce((a, p) => a + p.mentionRate, 0) / dashboard.providers.length) * 100)
+    : 0;
 
   return (
     <Page>
       <TitleBar title="GEO Monitor" />
       <BlockStack gap="500">
-        <InlineStack align="space-between" blockAlign="center">
-          <InlineStack gap="200" blockAlign="center">
-            <Badge tone="info">{plan.name}</Badge>
-            <Text as="span" tone="subdued">
-              {dashboard.lastScanAt ? `Last scan ${new Date(dashboard.lastScanAt).toLocaleDateString()}` : "No scans yet"}
-            </Text>
-          </InlineStack>
-          <Button variant="primary" loading={scanning} disabled={remaining < plan.repetitions}
-            onClick={() => fetcher.submit({}, { method: "post" })}>
-            Scan now
-          </Button>
-        </InlineStack>
-
         {remaining < plan.repetitions && (
           <Banner tone="warning">This period's query quota is used up. Scans resume next period, or upgrade your plan.</Banner>
         )}
-
         {scansStale && (
           <Banner tone="warning">
             No recent scans. Ensure the background worker is running (`npm run worker`), or click "Scan now".
@@ -126,72 +115,112 @@ export default function Dashboard() {
           <Banner tone="critical">Last scan reported a provider error: {lastScanError}</Banner>
         )}
 
+        {/* Hero */}
+        <Box background={scoreSurface(overall)} borderRadius="300" padding="500">
+          <InlineGrid columns={{ xs: "1fr", md: "auto 1fr" }} gap="500">
+            <Box background="bg-surface" borderRadius="300" padding="400" minWidth="170px">
+              <BlockStack gap="100" inlineAlign="center">
+                <Text as="p" variant="heading3xl">{dashboard.hasData ? `${overall}%` : "—"}</Text>
+                <Text as="span" tone="subdued" variant="bodySm">AI mention rate</Text>
+                <Badge tone="info">{`${plan.name} plan`}</Badge>
+              </BlockStack>
+            </Box>
+            <BlockStack gap="300">
+              <BlockStack gap="150">
+                <Text as="h2" variant="headingLg">How visible is your brand in AI answers?</Text>
+                <Text as="p" tone="subdued">
+                  Measured across ChatGPT, Claude, Gemini &amp; Perplexity for your tracked buyer questions.
+                  {dashboard.lastScanAt
+                    ? ` Last scan ${new Date(dashboard.lastScanAt).toLocaleDateString()}.`
+                    : " No scans yet."}
+                </Text>
+              </BlockStack>
+              <InlineStack gap="300" blockAlign="center">
+                <Button variant="primary" loading={scanning} disabled={remaining < plan.repetitions}
+                  onClick={() => fetcher.submit({}, { method: "post" })}>
+                  Scan now
+                </Button>
+                <Link to="/app/deep-scan">Run Deep Scan</Link>
+                <Link to="/app/deep">Open deep analysis</Link>
+              </InlineStack>
+              <Box>
+                <Text as="span" tone="subdued" variant="bodySm">Quota · {usage} / {plan.monthlyQueryQuota} queries this period</Text>
+                <ProgressBar progress={quotaPct} size="small" />
+              </Box>
+            </BlockStack>
+          </InlineGrid>
+        </Box>
+
         {!dashboard.hasData ? (
           <Card>
             <BlockStack gap="200">
               <Text as="h2" variant="headingMd">No results yet</Text>
               <Text as="p" tone="subdued">
-                Your first weekly scan runs automatically, or click "Scan now" to start immediately.
+                Your first weekly scan runs automatically, or click &quot;Scan now&quot; to start immediately.
                 (Results require the background worker to be running.)
               </Text>
             </BlockStack>
           </Card>
         ) : (
           <>
-            <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
-              {dashboard.providers.map((p) => (
-                <Card key={p.provider}>
-                  <BlockStack gap="200">
-                    <Text as="h3" variant="headingSm">{PROVIDER_LABEL[p.provider] ?? p.provider}</Text>
-                    <Text as="p" variant="heading2xl">{Math.round(p.mentionRate * 100)}%</Text>
-                    <Text as="span" tone="subdued">mention rate · {p.totalRuns} runs</Text>
-                    <InlineStack gap="200">
-                      <Badge tone={SENTIMENT_TONE[p.sentiment]}>{p.sentiment.toLowerCase()}</Badge>
-                      {p.avgPosition != null && <Badge>{`avg pos ${p.avgPosition.toFixed(1)}`}</Badge>}
-                    </InlineStack>
-                    <Sparkline values={p.trend} />
-                  </BlockStack>
-                </Card>
-              ))}
-            </InlineGrid>
-
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">Share of model</Text>
-                <Text as="p" tone="subdued">How often you appear vs. your competitors across all answers.</Text>
-                <ShareBar label="You" count={dashboard.shareOfModel.brand} max={shareMax(dashboard)} highlight />
-                {dashboard.shareOfModel.competitors.map((c) => (
-                  <ShareBar key={c.name} label={c.name} count={c.count} max={shareMax(dashboard)} />
+            <BlockStack gap="300">
+              <Text as="h3" variant="headingMd">Visibility by AI engine</Text>
+              <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
+                {dashboard.providers.map((p) => (
+                  <Card key={p.provider}>
+                    <BlockStack gap="200">
+                      <Text as="h3" variant="headingSm">{PROVIDER_LABEL[p.provider] ?? p.provider}</Text>
+                      <Text as="p" variant="heading2xl">{Math.round(p.mentionRate * 100)}%</Text>
+                      <Text as="span" tone="subdued">mention rate · {p.totalRuns} runs</Text>
+                      <InlineStack gap="200" wrap>
+                        <Badge tone={SENTIMENT_TONE[p.sentiment]}>{p.sentiment.toLowerCase()}</Badge>
+                        {p.avgPosition != null && <Badge>{`avg pos ${p.avgPosition.toFixed(1)}`}</Badge>}
+                      </InlineStack>
+                      <Sparkline values={p.trend} />
+                    </BlockStack>
+                  </Card>
                 ))}
-              </BlockStack>
-            </Card>
+              </InlineGrid>
+            </BlockStack>
 
-            {dashboard.gaps.length > 0 && (
+            <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
               <Card>
                 <BlockStack gap="300">
-                  <Text as="h2" variant="headingMd">Where you're missing</Text>
-                  <Text as="p" tone="subdued">Competitors named in answers where your brand was not mentioned.</Text>
-                  {dashboard.gaps.map((g) => (
-                    <InlineStack key={g.name} align="space-between">
-                      <Text as="span">{g.name}</Text>
-                      <Badge tone="critical">{`${g.count}×`}</Badge>
-                    </InlineStack>
+                  <Text as="h2" variant="headingMd">Share of model</Text>
+                  <Text as="p" tone="subdued">How often you appear vs. your competitors across all answers.</Text>
+                  <ShareBar label="You" count={dashboard.shareOfModel.brand} max={shareMax(dashboard)} highlight />
+                  {dashboard.shareOfModel.competitors.map((c) => (
+                    <ShareBar key={c.name} label={c.name} count={c.count} max={shareMax(dashboard)} />
                   ))}
                 </BlockStack>
               </Card>
-            )}
+
+              {dashboard.gaps.length > 0 && (
+                <Card>
+                  <BlockStack gap="300">
+                    <Text as="h2" variant="headingMd">Where you&apos;re missing</Text>
+                    <Text as="p" tone="subdued">Competitors named in answers where your brand was not mentioned.</Text>
+                    {dashboard.gaps.map((g) => (
+                      <InlineStack key={g.name} align="space-between">
+                        <Text as="span">{g.name}</Text>
+                        <Badge tone="critical">{`${g.count}×`}</Badge>
+                      </InlineStack>
+                    ))}
+                  </BlockStack>
+                </Card>
+              )}
+            </InlineGrid>
           </>
         )}
 
-        <Box>
-          <Text as="span" tone="subdued">Quota: {usage} / {plan.monthlyQueryQuota} queries this period</Text>
-          <ProgressBar progress={quotaPct} size="small" />
-          <InlineStack align="end"><Link to="/app/settings">Manage prompts &amp; competitors</Link></InlineStack>
-        </Box>
+        <InlineStack align="end"><Link to="/app/settings">Manage prompts &amp; competitors</Link></InlineStack>
       </BlockStack>
     </Page>
   );
 }
+
+const scoreSurface = (s: number): "bg-surface-success" | "bg-surface-caution" | "bg-surface-critical" =>
+  s >= 60 ? "bg-surface-success" : s >= 25 ? "bg-surface-caution" : "bg-surface-critical";
 
 function shareMax(d: { shareOfModel: { brand: number; competitors: { count: number }[] } }) {
   return Math.max(1, d.shareOfModel.brand, ...d.shareOfModel.competitors.map((c) => c.count));

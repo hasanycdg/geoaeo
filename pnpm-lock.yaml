@@ -137,6 +137,28 @@ importers:
         specifier: ^4.19.2
         version: 4.22.4
 
+  extensions/geo-product-copy:
+    dependencies:
+      '@shopify/ui-extensions':
+        specifier: 2025.7.4
+        version: 2025.7.4
+      '@shopify/ui-extensions-react':
+        specifier: 2025.7.4
+        version: 2025.7.4(@shopify/ui-extensions@2025.7.4)(react-reconciler@0.29.2(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-reconciler:
+        specifier: ^0.29.0
+        version: 0.29.2(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.31
+        version: 18.3.31
+      typescript:
+        specifier: ^5.2.2
+        version: 5.9.3
+
   packages/core:
     dependencies:
       '@anthropic-ai/sdk':
@@ -1682,6 +1704,27 @@ packages:
   '@remix-run/web-stream@1.1.0':
     resolution: {integrity: sha512-KRJtwrjRV5Bb+pM7zxcTJkhIqWWSy+MYsIxHK+0m5atcznsf15YwUBWHWulZerV2+vvHH1Lp1DD7pw6qKW8SgA==}
 
+  '@remote-ui/async-subscription@2.1.18':
+    resolution: {integrity: sha512-O+76qOiTGN6iJZBFncELNIBnhCbHAIYrsrG0n3SjmwXE9Gy6nl4xZoa5FqIcw5VPz7EAdwKBkFsRE5uyQB7FOw==}
+
+  '@remote-ui/core@2.2.7':
+    resolution: {integrity: sha512-9eiTKy2eNKcT76xS0Dpz06ae2oClGAUUjx+HTDsz6fh7n/SS8Avid5N7GOaRiny/6T/cMJxaCeycMQJsEviGjA==}
+
+  '@remote-ui/react@5.0.8':
+    resolution: {integrity: sha512-GUwqP0b4m2TQ8THbsjhBvvYXZfvyWbP6HlYtzKw7izW9C49DWrixLuSz41kB4Ae7MI1OUfKy3xHtwXeLWa+nuA==}
+    peerDependencies:
+      react: '>=17.0.0 <19.0.0'
+      react-reconciler: '>=0.26.0 <0.30.0'
+    peerDependenciesMeta:
+      react-reconciler:
+        optional: true
+
+  '@remote-ui/rpc@1.4.7':
+    resolution: {integrity: sha512-ORiaKsbVBSEi3Z4YWOj5Ucrp70NrkNktI1hdqqfBW7Z3o0YoxTX9MIqtLmsc6721IbjmExvLrLip5I5Y7uAbng==}
+
+  '@remote-ui/types@1.1.3':
+    resolution: {integrity: sha512-P1kN1F3p0oMgnLN8Of1Ie9am3sLvJ7nhqHH1pvzkrxqjVwhhyPVZNcwOHyUNZPKp62izhDavdrcnqrdXzVJqGA==}
+
   '@repeaterjs/repeater@3.1.0':
     resolution: {integrity: sha512-TaoVksZRSx2KWYYpyLQtMQXXeS98VsgZImzW65xmiVgbYhXLk+aEsmzPLirqVuE4/XuUapH2iMtxUzaBNDzdSQ==}
 
@@ -1907,6 +1950,15 @@ packages:
   '@shopify/storefront-api-client@1.0.10':
     resolution: {integrity: sha512-A0ItFW58L5+y/jnnJDEsmt2YcQSt2BG+pNoQOYRpPBJaOLpTj7A13q1QVrE5XYVGZCA6ZQ6FqAtgosHHrkut0Q==}
 
+  '@shopify/ui-extensions-react@2025.7.4':
+    resolution: {integrity: sha512-TLnPnCe5Ga3eJLzhBJtlpqdVjQdw9lBOVCek+bwkDfGfPZX17Jxo9AkLXlf0bBaNU6WFpD/uaALkmap35S4z6g==}
+    peerDependencies:
+      '@shopify/ui-extensions': 2025.7.4
+      react: '>=18.0.0'
+
+  '@shopify/ui-extensions@2025.7.4':
+    resolution: {integrity: sha512-pKk0UadAa/sW3McqbjnzxGmxZZIsNPJF/rX0zpMCzJqG2E0Fh/SIksDquD9MOXHskgLM7c7t+YHveml2aITLtQ==}
+
   '@stablelib/base64@1.0.1':
     resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
@@ -1972,6 +2024,11 @@ packages:
     resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
     peerDependencies:
       '@types/react': ^18.0.0
+
+  '@types/react-reconciler@0.28.9':
+    resolution: {integrity: sha512-HHM3nxyUZ3zAylX8ZEyrDNd2XZOnQ0D5XfunJF5FLQnZbHHYq4UWvW1QfelQNXv1ICNkwYhfxjwfnqivYB6bFg==}
+    peerDependencies:
+      '@types/react': '*'
 
   '@types/react-transition-group@4.4.12':
     resolution: {integrity: sha512-8TV6R3h2j7a91c+1DXdJi3Syo69zzIZbz7Lg5tORM5LEJG7X/E6a1V3drRyBRZq7/utz7A+c4OgYLiLcYGHG6w==}
@@ -4709,6 +4766,12 @@ packages:
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
 
+  react-reconciler@0.29.2:
+    resolution: {integrity: sha512-zZQqIiYgDCTP/f1N/mAR10nJGrPD2ZR+jDSEsKWJHYC7Cm2wodlwbR3upZRdC3cjIjSlTLNVyO7Iu0Yy7t2AYg==}
+    engines: {node: '>=0.10.0'}
+    peerDependencies:
+      react: ^18.3.1
+
   react-refresh@0.14.2:
     resolution: {integrity: sha512-jCvmsr+1IUSMUyzOkRcvnVbX3ZYC6g9TDrDbFuFmRDq7PD4yaGbLKNQL6k2jnArV8hjYxh7hVhAZB6s9HDGpZA==}
     engines: {node: '>=0.10.0'}
@@ -7274,6 +7337,30 @@ snapshots:
     dependencies:
       web-streams-polyfill: 3.3.3
 
+  '@remote-ui/async-subscription@2.1.18':
+    dependencies:
+      '@remote-ui/rpc': 1.4.7
+
+  '@remote-ui/core@2.2.7':
+    dependencies:
+      '@remote-ui/rpc': 1.4.7
+      '@remote-ui/types': 1.1.3
+
+  '@remote-ui/react@5.0.8(react-reconciler@0.29.2(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@remote-ui/async-subscription': 2.1.18
+      '@remote-ui/core': 2.2.7
+      '@remote-ui/rpc': 1.4.7
+      '@types/react': 18.3.31
+      '@types/react-reconciler': 0.28.9(@types/react@18.3.31)
+      react: 18.3.1
+    optionalDependencies:
+      react-reconciler: 0.29.2(react@18.3.1)
+
+  '@remote-ui/rpc@1.4.7': {}
+
+  '@remote-ui/types@1.1.3': {}
+
   '@repeaterjs/repeater@3.1.0': {}
 
   '@rollup/rollup-android-arm-eabi@4.62.2':
@@ -7465,6 +7552,21 @@ snapshots:
     dependencies:
       '@shopify/graphql-client': 1.4.2
 
+  '@shopify/ui-extensions-react@2025.7.4(@shopify/ui-extensions@2025.7.4)(react-reconciler@0.29.2(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@remote-ui/async-subscription': 2.1.18
+      '@remote-ui/react': 5.0.8(react-reconciler@0.29.2(react@18.3.1))(react@18.3.1)
+      '@shopify/ui-extensions': 2025.7.4
+      '@types/react': 18.3.31
+      react: 18.3.1
+    transitivePeerDependencies:
+      - react-reconciler
+
+  '@shopify/ui-extensions@2025.7.4':
+    dependencies:
+      '@remote-ui/async-subscription': 2.1.18
+      '@remote-ui/core': 2.2.7
+
   '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
@@ -7533,6 +7635,10 @@ snapshots:
   '@types/prop-types@15.7.15': {}
 
   '@types/react-dom@18.3.7(@types/react@18.3.31)':
+    dependencies:
+      '@types/react': 18.3.31
+
+  '@types/react-reconciler@0.28.9(@types/react@18.3.31)':
     dependencies:
       '@types/react': 18.3.31
 
@@ -10807,6 +10913,12 @@ snapshots:
   react-is@16.13.1: {}
 
   react-is@17.0.2: {}
+
+  react-reconciler@0.29.2(react@18.3.1):
+    dependencies:
+      loose-envify: 1.4.0
+      react: 18.3.1
+      scheduler: 0.23.2
 
   react-refresh@0.14.2: {}
 

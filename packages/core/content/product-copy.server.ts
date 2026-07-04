@@ -5,8 +5,7 @@
 //
 // Platform-agnostic: product selection/detail is supplied by the PlatformPort
 // (as CatalogItem); this module only turns a product into rewritten copy.
-import Anthropic from "@anthropic-ai/sdk";
-import { ANALYSIS_MODEL } from "../providers/config";
+import { openaiJson } from "../providers/analysis-llm.server";
 import type { CatalogItem } from "../ports";
 
 export interface ProductDetail {
@@ -55,39 +54,25 @@ const SCHEMA = {
 } as const;
 
 export async function suggestProductCopy(product: ProductDetail): Promise<CopySuggestion> {
-  if (!process.env.ANTHROPIC_API_KEY) return templateSuggestion(product);
-  try {
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: ANALYSIS_MODEL,
-      max_tokens: 1024,
-      system:
-        "You rewrite e-commerce product copy so AI assistants (ChatGPT, Claude, " +
-        "Gemini, Perplexity) can confidently recommend it for natural, " +
-        "conversational shopper questions. Write in plain natural language a " +
-        "person would say — NOT keyword-stuffed SEO. Answer the questions a " +
-        "buyer would actually ask. Be specific and concrete; never invent facts " +
-        "not implied by the input. Return strict JSON: a rewritten `description` " +
-        "(2-4 sentences), 3-5 scannable `bullets`, and 3 `faqs`.",
-      messages: [
-        {
-          role: "user",
-          content:
-            `Title: ${product.title}\n` +
-            `Type: ${product.productType || "(none)"}\n` +
-            `Tags: ${product.tags.join(", ") || "(none)"}\n\n` +
-            `Current description:\n"""${product.description.replace(/<[^>]*>/g, " ").slice(0, 3000)}"""`,
-        },
-      ],
-      output_config: { format: { type: "json_schema", schema: SCHEMA } },
-    });
-    const block = res.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!block) return templateSuggestion(product);
-    const parsed = JSON.parse(block.text) as Omit<CopySuggestion, "source">;
-    return { ...parsed, source: "llm" };
-  } catch {
-    return templateSuggestion(product);
-  }
+  const parsed = await openaiJson<Omit<CopySuggestion, "source">>({
+    schemaName: "product_copy",
+    schema: SCHEMA as unknown as Record<string, unknown>,
+    maxTokens: 1024,
+    system:
+      "You rewrite e-commerce product copy so AI assistants (ChatGPT, Claude, " +
+      "Gemini, Perplexity) can confidently recommend it for natural, " +
+      "conversational shopper questions. Write in plain natural language a " +
+      "person would say — NOT keyword-stuffed SEO. Answer the questions a " +
+      "buyer would actually ask. Be specific and concrete; never invent facts " +
+      "not implied by the input. Return strict JSON: a rewritten `description` " +
+      "(2-4 sentences), 3-5 scannable `bullets`, and 3 `faqs`.",
+    user:
+      `Title: ${product.title}\n` +
+      `Type: ${product.productType || "(none)"}\n` +
+      `Tags: ${product.tags.join(", ") || "(none)"}\n\n` +
+      `Current description:\n"""${product.description.replace(/<[^>]*>/g, " ").slice(0, 3000)}"""`,
+  });
+  return parsed ? { ...parsed, source: "llm" } : templateSuggestion(product);
 }
 
 function templateSuggestion(product: ProductDetail): CopySuggestion {

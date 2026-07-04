@@ -76,7 +76,7 @@ export default function Improve() {
           <InlineStack align="space-between" blockAlign="center">
             <BlockStack gap="100">
               <Text as="h2" variant="headingMd">Technical AI-readiness audit</Text>
-              <Text as="p" tone="subdued">Checks {domain} for blocked AI crawlers and missing product structured data.</Text>
+              <Text as="p" tone="subdued">Checks {domain} for blocked AI crawlers, product &amp; FAQ structured data, llms.txt, sitemap.xml, meta description and Open Graph tags.</Text>
             </BlockStack>
             <Button variant="primary" loading={busy} onClick={() => fetcher.submit({ intent: "run-audit" }, { method: "post" })}>
               Run audit

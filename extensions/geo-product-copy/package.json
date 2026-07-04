@@ -1,0 +1,16 @@
+{
+  "name": "geo-product-copy",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@shopify/ui-extensions": "2025.7.4",
+    "@shopify/ui-extensions-react": "2025.7.4",
+    "react": "^18.2.0",
+    "react-reconciler": "^0.29.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.31",
+    "typescript": "^5.2.2"
+  }
+}

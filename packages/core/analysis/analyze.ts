@@ -1,11 +1,10 @@
 // Hybrid answer analysis.
 //   String matching (free, deterministic): brand/competitor detection, position,
 //     prominence, own-domain citation detection.
-//   ONE cheap LLM call (claude-haiku-4-5): sentiment + fuzzy mention recovery
+//   ONE cheap LLM call (OpenAI gpt-4o-mini): sentiment + fuzzy mention recovery
 //     (typos / paraphrased brand names string matching misses).
 // The expensive grounded model is NEVER used here — that's the cost lever.
-import Anthropic from "@anthropic-ai/sdk";
-import { ANALYSIS_MODEL } from "../providers/config";
+import { openaiJson } from "../providers/analysis-llm.server";
 import type { Citation } from "../providers/types";
 
 export type Sentiment = "POSITIVE" | "NEUTRAL" | "NEGATIVE" | "MIXED" | "UNKNOWN";
@@ -79,33 +78,18 @@ async function llmSentiment(
   text: string,
   brand: BrandSpec,
 ): Promise<{ sentiment: Sentiment; brandMentioned: boolean } | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null; // no key → skip, string-match only
-  try {
-    const client = new Anthropic();
-    const res = await client.messages.create({
-      model: ANALYSIS_MODEL,
-      max_tokens: 256,
-      system:
-        "You analyze how a brand is portrayed in an AI assistant's answer. " +
-        "Return strict JSON. brandMentioned=true if the brand (or a close " +
-        "variant/typo) appears at all. sentiment is how the brand is portrayed.",
-      messages: [
-        {
-          role: "user",
-          content:
-            `Brand: ${brand.name}${brand.aliases?.length ? ` (aliases: ${brand.aliases.join(", ")})` : ""}\n\n` +
-            `Answer:\n"""${text.slice(0, 6000)}"""`,
-        },
-      ],
-      output_config: { format: { type: "json_schema", schema: SENTIMENT_SCHEMA } },
-    });
-    const block = res.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    if (!block) return null;
-    const parsed = JSON.parse(block.text) as { sentiment: Sentiment; brandMentioned: boolean };
-    return parsed;
-  } catch {
-    return null; // analysis must never crash a run; fall back to string match
-  }
+  return openaiJson<{ sentiment: Sentiment; brandMentioned: boolean }>({
+    schemaName: "brand_sentiment",
+    schema: SENTIMENT_SCHEMA as unknown as Record<string, unknown>,
+    maxTokens: 256,
+    system:
+      "You analyze how a brand is portrayed in an AI assistant's answer. " +
+      "Return strict JSON. brandMentioned=true if the brand (or a close " +
+      "variant/typo) appears at all. sentiment is how the brand is portrayed.",
+    user:
+      `Brand: ${brand.name}${brand.aliases?.length ? ` (aliases: ${brand.aliases.join(", ")})` : ""}\n\n` +
+      `Answer:\n"""${text.slice(0, 6000)}"""`,
+  });
 }
 
 // --- public API ----------------------------------------------------------

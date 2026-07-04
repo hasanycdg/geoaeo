@@ -11,23 +11,30 @@ const connection = redis as unknown as ConnectionOptions;
 
 export const SCANS_QUEUE = "geo-scans";
 export const SCHEDULER_QUEUE = "geo-scheduler";
+export const DEEP_SCANS_QUEUE = "geo-deep-scans";
 
 export interface TenantScanJob {
   tenantId: string;
   trigger: "scheduled" | "manual";
 }
 
+export interface DeepScanJob {
+  deepScanId: string;
+}
+
 type ScanQueue = Queue<TenantScanJob, unknown, string>;
+type DeepScanQueueT = Queue<DeepScanJob, unknown, string>;
 
 declare global {
   // eslint-disable-next-line no-var
-  var __geoQueues: { scans: ScanQueue; scheduler: Queue } | undefined;
+  var __geoQueues: { scans: ScanQueue; scheduler: Queue; deepScans: DeepScanQueueT } | undefined;
 }
 
 function build() {
   return {
     scans: new Queue<TenantScanJob, unknown, string>(SCANS_QUEUE, { connection }),
     scheduler: new Queue(SCHEDULER_QUEUE, { connection }),
+    deepScans: new Queue<DeepScanJob, unknown, string>(DEEP_SCANS_QUEUE, { connection }),
   };
 }
 
@@ -36,6 +43,16 @@ if (process.env.NODE_ENV !== "production") global.__geoQueues = queues;
 
 export const scansQueue = queues.scans;
 export const schedulerQueue = queues.scheduler;
+export const deepScansQueue = queues.deepScans;
+
+/** Enqueue a Deep Scan job (heavy, credit-gated; one row per run). */
+export async function enqueueDeepScan(deepScanId: string) {
+  return deepScansQueue.add(
+    "deep-scan",
+    { deepScanId },
+    { attempts: 1, removeOnComplete: 50, removeOnFail: 100 },
+  );
+}
 
 /** Enqueue a scan for one shop (used by the scheduler and by manual "scan now"). */
 export async function enqueueTenantScan(tenantId: string, trigger: TenantScanJob["trigger"]) {

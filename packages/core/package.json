@@ -10,6 +10,7 @@
     "./providers": "./providers/index.ts",
     "./scan": "./scan/index.ts",
     "./analysis": "./analysis/index.ts",
+    "./deep-scan": "./deep-scan/index.ts",
     "./audit": "./audit/index.ts",
     "./content": "./content/index.ts",
     "./models": "./models/index.ts",

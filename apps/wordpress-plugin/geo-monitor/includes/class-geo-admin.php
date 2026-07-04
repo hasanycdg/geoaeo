@@ -65,6 +65,7 @@ class Geo_Admin {
 
         $tenant = $this->client->get('/api/v1/tenant');
         $dash   = $this->client->get('/api/v1/dashboard');
+        $plans  = $this->client->get('/api/v1/plans');
         $t = (!is_wp_error($tenant) && isset($tenant['tenant'])) ? $tenant['tenant'] : array();
         $limits = (!is_wp_error($tenant) && isset($tenant['limits'])) ? $tenant['limits'] : array();
 
@@ -148,22 +149,47 @@ class Geo_Admin {
             esc_html__('View llms.txt', 'geo-monitor') . '</a>';
         echo '</div></div>';
 
-        // --- Upgrade ---------------------------------------------------------
-        echo '<div class="geo-card span2"><h2>' . esc_html__('Upgrade', 'geo-monitor') . '</h2><div class="geo-plans">';
-        foreach (array('STARTER', 'GROWTH', 'PRO') as $pl) {
-            echo '<div class="geo-plan-card"><div class="name">' . esc_html($pl) . '</div>';
-            if ($plan === $pl) {
-                echo '<button type="button" class="geo-btn geo-btn-ghost" disabled>' . esc_html__('Current plan', 'geo-monitor') . '</button>';
-            } else {
-                echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
-                wp_nonce_field('geo_upgrade');
-                echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pl) . '" />';
-                echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html(sprintf(__('Choose %s', 'geo-monitor'), $pl)) . '</button>';
-                echo '</form>';
+        // --- Plans & pricing -------------------------------------------------
+        $catalog = (!is_wp_error($plans) && !empty($plans['plans'])) ? $plans['plans'] : array();
+        if ($catalog) {
+            echo '<div class="geo-card span2"><h2>' . esc_html__('Plans & pricing', 'geo-monitor') . '</h2>';
+            echo '<p class="geo-hint">' . esc_html__('Billed securely via Stripe. Prices in USD per month.', 'geo-monitor') . '</p>';
+            echo '<div class="geo-plans">';
+            foreach ($catalog as $p) {
+                $pid   = isset($p['id']) ? $p['id'] : '';
+                $isCur = ($plan === $pid);
+                $pop   = !empty($p['popular']);
+                $cls   = 'geo-plan-card' . ($pop ? ' popular' : '') . ($isCur ? ' current' : '');
+                echo '<div class="' . esc_attr($cls) . '">';
+                echo '<div class="name">' . esc_html(isset($p['name']) ? $p['name'] : $pid);
+                if ($pop)   echo ' <span class="geo-tag">' . esc_html__('Popular', 'geo-monitor') . '</span>';
+                if ($isCur) echo ' <span class="geo-tag ok">' . esc_html__('Current', 'geo-monitor') . '</span>';
+                echo '</div>';
+                echo '<div class="price">$' . esc_html((string) (isset($p['priceUsd']) ? $p['priceUsd'] : 0));
+                if ((float) (isset($p['priceUsd']) ? $p['priceUsd'] : 0) > 0) {
+                    echo '<span class="per">' . esc_html__('/mo', 'geo-monitor') . '</span>';
+                }
+                echo '</div>';
+                echo '<ul class="geo-feats">';
+                foreach ((array) (isset($p['features']) ? $p['features'] : array()) as $f) {
+                    echo '<li>' . esc_html($f) . '</li>';
+                }
+                echo '</ul>';
+                if ($isCur) {
+                    echo '<button type="button" class="geo-btn geo-btn-ghost" disabled>' . esc_html__('Current plan', 'geo-monitor') . '</button>';
+                } elseif ($pid === 'FREE') {
+                    echo '<span class="geo-muted">' . esc_html__('Free tier', 'geo-monitor') . '</span>';
+                } else {
+                    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                    wp_nonce_field('geo_upgrade');
+                    echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pid) . '" />';
+                    echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html(sprintf(__('Choose %s', 'geo-monitor'), isset($p['name']) ? $p['name'] : $pid)) . '</button>';
+                    echo '</form>';
+                }
+                echo '</div>';
             }
-            echo '</div>';
+            echo '</div></div>';
         }
-        echo '</div></div>';
 
         echo '</div></div>'; // .geo-grid, .wrap
     }

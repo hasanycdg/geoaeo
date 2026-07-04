@@ -45,6 +45,12 @@ export const PROVIDER_MODELS: Record<Provider, ProviderModelConfig> = {
 /** Cheap model for the hybrid analysis step (sentiment + fuzzy mention detection). */
 export const ANALYSIS_MODEL = env("ANALYSIS_MODEL", "claude-haiku-4-5");
 
+/**
+ * Cheap OpenAI model for analysis + generation (sentiment, product copy, deep
+ * report). Kept on OpenAI so the whole product runs on a single OPENAI_API_KEY.
+ */
+export const OPENAI_ANALYSIS_MODEL = env("OPENAI_ANALYSIS_MODEL", "gpt-4o-mini");
+
 /** Default repetitions per (prompt × model × scheduled run). Non-determinism → aggregate. */
 export const DEFAULT_REPETITIONS = Number(env("QUERY_REPETITIONS", "3"));
 
