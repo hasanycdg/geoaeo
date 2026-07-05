@@ -1,0 +1,35 @@
+# Shopify Remix app (embedded frontend). Build from the REPO ROOT as context:
+#   docker build -f Dockerfile.web -t geo-web .
+# Runs `remix-serve` only — it must NOT run migrations (the @geo/db migrate
+# service in docker-compose.prod.yml owns the schema; the root ./prisma client
+# is generate-only here and shares the same DB the API/worker use).
+FROM node:22-slim AS base
+ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
+RUN corepack enable
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+
+# Workspace deps (the root "app" package depends on @geo/core + @geo/db).
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+COPY packages/db/package.json packages/db/
+COPY packages/core/package.json packages/core/
+RUN pnpm install --frozen-lockfile
+
+# Sources needed to build the Remix app.
+COPY tsconfig.base.json tsconfig.json vite.config.ts env.d.ts ./
+COPY prisma prisma
+COPY packages/db packages/db
+COPY packages/core packages/core
+COPY app app
+
+# Prisma clients: @geo/db (used by provision via createRequire) + the root
+# schema (used by app/db.server.ts for Shopify session storage).
+RUN pnpm --filter @geo/db generate
+RUN pnpm exec prisma generate
+
+# Build the Remix server + client bundles.
+RUN pnpm run build
+
+ENV NODE_ENV=production
+EXPOSE 3000
+CMD ["pnpm", "start"]

@@ -43,13 +43,57 @@ git pull
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+## Deploy the embedded Shopify app (app.<domain>)
+
+The Shopify Remix app now runs as the `web` service in the same compose stack
+(shares the DB with the API/worker). To host it publicly for testing/submission:
+
+1. **DNS**: add an A-record `app.<domain>` → this server's IP.
+2. **.env** (on the server): fill in the Shopify credentials from the Partner
+   Dashboard → your app → API credentials, plus the public app URL:
+   ```
+   SHOPIFY_API_KEY=...
+   SHOPIFY_API_SECRET=...
+   SHOPIFY_APP_URL=https://app.getbrandradar.com
+   WEB_HOST_PORT=8780
+   ```
+3. **Build + start** (rebuilds api + web, runs migrations, starts everything):
+   ```sh
+   docker compose -f docker-compose.prod.yml up -d --build
+   ```
+4. **nginx + TLS** for the app subdomain:
+   ```sh
+   sudo cp deploy/nginx-app.conf /etc/nginx/sites-available/app.getbrandradar.com
+   sudo ln -s /etc/nginx/sites-available/app.getbrandradar.com /etc/nginx/sites-enabled/
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo certbot --nginx -d app.getbrandradar.com
+   ```
+5. **Point Shopify at the deployed URL** — in `shopify.app.toml` set:
+   ```toml
+   application_url = "https://app.getbrandradar.com"
+   [auth]
+   redirect_urls = [ "https://app.getbrandradar.com/auth/callback" ]
+   [app_proxy]
+   url = "https://app.getbrandradar.com/proxy"
+   ```
+   then push the config + extensions from your machine:
+   ```sh
+   npm run deploy          # = shopify app deploy
+   ```
+6. In the **Partner Dashboard**, set distribution to **Public (unlisted)** so you
+   can install on a test store and exercise the real billing flow before submitting.
+
+Verify: `curl https://app.getbrandradar.com` returns the app (302 to Shopify auth
+when hit directly is expected), and installing on the dev store loads the embedded UI.
+
 ## Wiring the clients
 
 - **WordPress plugin**: default backend is `https://api.getbrandradar.com`. If your
   domain differs, set in `wp-config.php`:
   `define('GEO_BACKEND_URL', 'https://api.<your-domain>');`
-- **Shopify app**: set `GEO_API_URL=https://api.<your-domain>` and the SAME
-  `INTERNAL_API_SECRET` as this server's `.env`.
+- **Shopify app**: hosted as the `web` service above; it reaches the API over the
+  internal compose network (`GEO_API_URL=http://api-web:3000`, set in compose) and
+  shares `INTERNAL_API_SECRET` from `.env`.
 
 ## Notes
 
