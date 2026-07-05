@@ -6,6 +6,9 @@
 // paid state, and (c) translate a provider webhook into a plan change.
 import type { Plan, Tenant } from "../domain/tenant";
 
+/** Billing cadence. Yearly is priced at 10× monthly (2 months free). */
+export type BillingInterval = "monthly" | "yearly";
+
 export interface CheckoutSession {
   /** URL to redirect the merchant to in order to confirm/pay for the plan. */
   url: string;
@@ -32,7 +35,12 @@ export interface BillingPort {
    * Begin an upgrade/downgrade to `plan`. `returnUrl` is where the provider sends
    * the merchant back after confirmation. FREE never calls this (no charge).
    */
-  createCheckout(tenant: Tenant, plan: Plan, returnUrl: string): Promise<CheckoutSession>;
+  createCheckout(
+    tenant: Tenant,
+    plan: Plan,
+    returnUrl: string,
+    interval?: BillingInterval,
+  ): Promise<CheckoutSession>;
 
   /**
    * Authoritatively read the tenant's current plan from the provider. Used to

@@ -10,7 +10,6 @@ import {
   Text,
   Button,
   Select,
-  Badge,
   Banner,
   Box,
   List,
@@ -82,11 +81,11 @@ function LlmsTxtCard({
   const copy = () => navigator.clipboard.writeText(content);
   const download = () => {
     const blob = new Blob([content], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "llms.txt";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = "llms.txt";
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
   };
 
   return (
@@ -105,9 +104,7 @@ function LlmsTxtCard({
         {generatedAt && !fetcher.data && (
           <Text as="span" tone="subdued">Last generated {new Date(generatedAt).toLocaleString()}</Text>
         )}
-        {fetcher.data?.kind === "llms" && (
-          <Banner tone="success">Generated from {fetcher.data.productCount} products.</Banner>
-        )}
+        {fetcher.data?.kind === "llms" && <Banner tone="success">Generated from {fetcher.data.productCount} catalog items.</Banner>}
 
         {content && (
           <>
@@ -152,11 +149,6 @@ function ProductCopyCard({ products }: { products: { id: string; title: string }
           <Text as="h2" variant="headingMd">Product descriptions for AI</Text>
           <Text as="p" tone="subdued">Rewrites a product description in natural language for conversational AI queries — not keyword stuffing.</Text>
         </BlockStack>
-        <Banner tone="info">
-          Tip: you can also do this straight from a product. Open any product → “Add block” →
-          choose the <Text as="span" fontWeight="semibold">GEO — AI product copy</Text> block to generate and
-          apply an optimized description right there.
-        </Banner>
         <InlineStack gap="200" blockAlign="end">
           <div style={{ flex: 1 }}>
             <Select label="Product" labelHidden options={products.map((p) => ({ label: p.title, value: p.id }))} value={productId} onChange={setProductId} />
@@ -169,7 +161,7 @@ function ProductCopyCard({ products }: { products: { id: string; title: string }
         {suggestion && (
           <BlockStack gap="300">
             {suggestion.source === "template" && (
-              <Banner tone="warning">Add OPENAI_API_KEY to generate AI-written copy. Showing a template scaffold.</Banner>
+              <Banner tone="warning">Add ANTHROPIC_API_KEY to generate AI-written copy. Showing a template scaffold.</Banner>
             )}
             <Section title="Description" onCopy={() => navigator.clipboard.writeText(suggestion.description)}>
               <Text as="p">{suggestion.description}</Text>

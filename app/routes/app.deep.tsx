@@ -136,7 +136,7 @@ export default function DeepAnalysis() {
 
   return (
     <Page>
-      <TitleBar title="Deep analysis" />
+      <TitleBar title="Action Plan" />
       <BlockStack gap="500">
         <style>{`@media print { .geo-no-print { display: none !important; } .Polaris-Page { padding: 0 !important; } }`}</style>
 
@@ -146,7 +146,7 @@ export default function DeepAnalysis() {
               <InlineStack align="space-between" blockAlign="center">
                 <BlockStack gap="100">
                   <Text as="h2" variant="headingMd">
-                    AI visibility deep analysis
+                    Action Plan — AI visibility deep analysis
                   </Text>
                   <Text as="p" tone="subdued">
                     Reads your live catalog, your last scan and your competitors — then delivers a scored

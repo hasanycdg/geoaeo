@@ -103,19 +103,6 @@ export default function Dashboard() {
     <Page>
       <TitleBar title="GEO Monitor" />
       <BlockStack gap="500">
-        {remaining < plan.repetitions && (
-          <Banner tone="warning">This period's query quota is used up. Scans resume next period, or upgrade your plan.</Banner>
-        )}
-        {scansStale && (
-          <Banner tone="warning">
-            No recent scans. Ensure the background worker is running (`npm run worker`), or click "Scan now".
-          </Banner>
-        )}
-        {lastScanError && (
-          <Banner tone="critical">Last scan reported a provider error: {lastScanError}</Banner>
-        )}
-
-        {/* Hero */}
         <Box background={scoreSurface(overall)} borderRadius="300" padding="500">
           <InlineGrid columns={{ xs: "1fr", md: "auto 1fr" }} gap="500">
             <Box background="bg-surface" borderRadius="300" padding="400" minWidth="170px">
@@ -140,7 +127,6 @@ export default function Dashboard() {
                   onClick={() => fetcher.submit({}, { method: "post" })}>
                   Scan now
                 </Button>
-                <Link to="/app/deep-scan">Run Deep Scan</Link>
                 <Link to="/app/deep">Open deep analysis</Link>
               </InlineStack>
               <Box>
@@ -150,6 +136,18 @@ export default function Dashboard() {
             </BlockStack>
           </InlineGrid>
         </Box>
+
+        {remaining < plan.repetitions && (
+          <Banner tone="warning">This period's query quota is used up. Scans resume next period, or upgrade your plan.</Banner>
+        )}
+        {scansStale && (
+          <Banner tone="warning">
+            No recent scans. Ensure the background worker is running (`npm run worker`), or click "Scan now".
+          </Banner>
+        )}
+        {lastScanError && (
+          <Banner tone="critical">Last scan reported a provider error: {lastScanError}</Banner>
+        )}
 
         {!dashboard.hasData ? (
           <Card>
@@ -198,7 +196,7 @@ export default function Dashboard() {
               {dashboard.gaps.length > 0 && (
                 <Card>
                   <BlockStack gap="300">
-                    <Text as="h2" variant="headingMd">Where you&apos;re missing</Text>
+                    <Text as="h2" variant="headingMd">Where you're missing</Text>
                     <Text as="p" tone="subdued">Competitors named in answers where your brand was not mentioned.</Text>
                     {dashboard.gaps.map((g) => (
                       <InlineStack key={g.name} align="space-between">

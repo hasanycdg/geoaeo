@@ -115,6 +115,12 @@ export const PLANS: Record<Plan, PlanConfig> = {
 export const MVP_PLANS = Object.values(PLANS).filter((p) => p.isMvp);
 export const ORDERED_PLANS: Plan[] = ["FREE", "STARTER", "GROWTH", "PRO"];
 
+/** Yearly billing bills 10 months (2 months free). */
+export const YEARLY_MONTHS_FREE = 2;
+export function yearlyPriceUsd(p: PlanConfig): number {
+  return p.priceUsd * (12 - YEARLY_MONTHS_FREE);
+}
+
 export function planConfig(plan: Plan): PlanConfig {
   return PLANS[plan];
 }
@@ -159,6 +165,8 @@ export function planCatalog() {
       id: p.id,
       name: p.name,
       priceUsd: p.priceUsd,
+      priceYearlyUsd: yearlyPriceUsd(p),
+      yearlyMonthsFree: YEARLY_MONTHS_FREE,
       features: planFeatureList(p),
       deepScansPerMonth: Math.floor(p.deepScanCreditsPerPeriod / DEEP_SCAN_CREDIT_COST),
       engines: engineLabels(p),

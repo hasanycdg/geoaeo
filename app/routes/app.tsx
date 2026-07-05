@@ -25,12 +25,10 @@ export default function App() {
           Dashboard
         </Link>
         <Link to="/app/deep-scan">Deep Scan</Link>
-        <Link to="/app/deep">Deep analysis</Link>
-        <Link to="/app/answers">AI answers</Link>
-        <Link to="/app/trends">Trends</Link>
-        <Link to="/app/improve">Improve</Link>
+        <Link to="/app/deep">Action Plan</Link>
+        <Link to="/app/improve">AI Readiness</Link>
         <Link to="/app/content">AI content</Link>
-        <Link to="/app/settings">Setup</Link>
+        <Link to="/app/settings">Brand Settings</Link>
         <Link to="/app/billing">Plan &amp; billing</Link>
       </NavMenu>
       <Outlet />
@@ -38,7 +36,6 @@ export default function App() {
   );
 }
 
-// Shopify needs Remix to catch some thrown responses, so that their headers are included in the response.
 export function ErrorBoundary() {
   return boundary.error(useRouteError());
 }

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
-import { useLoaderData, useFetcher } from "@remix-run/react";
+import { useFetcher, useLoaderData } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -18,18 +18,17 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import { apiGet, apiPost } from "../geo/backend.server";
-import { PLANS, planFeatureList, type PlanConfig } from "@geo/core/config/plans";
+import { PLANS, ORDERED_PLANS, planFeatureList, type PlanConfig } from "@geo/core/config/plans";
 
 const isTest = process.env.NODE_ENV !== "production";
-const ORDER: PlanConfig["id"][] = ["FREE", "STARTER", "GROWTH", "PRO"];
 const POPULAR: PlanConfig["id"] = "GROWTH";
+const RANK: Record<string, number> = { FREE: 0, STARTER: 1, GROWTH: 2, PRO: 3 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   // Backend reconciles our stored plan with the Shopify subscription state.
   const { plan } = await apiGet(session.shop, "/api/v1/billing/plan");
-  const plans = ORDER.map((id) => PLANS[id]);
-  return json({ currentPlan: plan as string, plans });
+  return json({ currentPlan: plan as string, plans: ORDERED_PLANS.map((id) => PLANS[id]) });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -40,10 +39,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "upgrade") {
     const plan = String(form.get("plan")); // STARTER | GROWTH | PRO
-    // Backend creates the AppSubscription and returns Shopify's confirmation URL;
-    // we navigate the top frame to it (embedded apps can't 302 the iframe).
     try {
-      const { url } = await apiPost(session.shop, "/api/v1/billing/checkout", { plan, returnUrl });
+      const { url } = await apiPost(session.shop, "/api/v1/billing/checkout", { plan, returnUrl, interval: "monthly" });
       return json({ url });
     } catch (e) {
       return json({ error: billingError(e) });
@@ -60,28 +57,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return json({ error: "unknown" });
 };
 
-// Turn backend/Shopify billing errors into a friendly notice. In development the
-// Shopify Billing API is unavailable until the app has a public distribution.
 function billingError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
   if (/public distribution|Billing API/i.test(msg)) {
-    return "Billing isn't available yet: Shopify only enables charges once this app is published (public distribution). Everything else works in development — this is expected.";
+    return "Billing isn't available yet: Shopify enables charges once this app is published (public distribution). Everything else works in development — this is expected.";
   }
   return "Couldn't start checkout. Please try again.";
 }
 
-const RANK: Record<string, number> = { FREE: 0, STARTER: 1, GROWTH: 2, PRO: 3 };
-
-export default function Billing() {
+export default function BillingRoute() {
   const { currentPlan, plans } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
 
   useEffect(() => {
     const data = fetcher.data;
-    if (data && "url" in data && data.url) {
-      window.open(data.url as string, "_top");
-    }
+    if (data && "url" in data && data.url) window.open(data.url as string, "_top");
   }, [fetcher.data]);
 
   return (
@@ -89,9 +80,7 @@ export default function Billing() {
       <TitleBar title="Plan & billing" />
       <BlockStack gap="500">
         <BlockStack gap="100">
-          <Text as="h2" variant="headingLg">
-            Choose your plan
-          </Text>
+          <Text as="h2" variant="headingLg">Choose your plan</Text>
           <Text as="p" tone="subdued">
             Billed securely through Shopify — charges appear on your Shopify invoice.
             {isTest ? " (Test mode: no real charge.)" : ""}
@@ -109,7 +98,6 @@ export default function Billing() {
             const isCurrent = currentPlan === p.id;
             const popular = p.id === POPULAR;
             const isUpgrade = RANK[p.id] > (RANK[currentPlan] ?? 0);
-
             return (
               <Box
                 key={p.id}
@@ -122,24 +110,13 @@ export default function Billing() {
               >
                 <BlockStack gap="300">
                   <InlineStack align="space-between" blockAlign="center">
-                    <Text as="h3" variant="headingMd">
-                      {p.name}
-                    </Text>
-                    {isCurrent ? (
-                      <Badge tone="success">Current</Badge>
-                    ) : popular ? (
-                      <Badge tone="magic">Popular</Badge>
-                    ) : null}
+                    <Text as="h3" variant="headingMd">{p.name}</Text>
+                    {isCurrent ? <Badge tone="success">Current</Badge> : popular ? <Badge tone="magic">Popular</Badge> : null}
                   </InlineStack>
 
                   <Text as="p" variant="heading2xl">
                     ${p.priceUsd}
-                    {p.priceUsd > 0 ? (
-                      <Text as="span" variant="bodySm" tone="subdued">
-                        {" "}
-                        / mo
-                      </Text>
-                    ) : null}
+                    {p.priceUsd > 0 ? <Text as="span" variant="bodySm" tone="subdued"> / mo</Text> : null}
                   </Text>
 
                   <Divider />
@@ -147,9 +124,7 @@ export default function Billing() {
                   <BlockStack gap="150">
                     {planFeatureList(p).map((f) => (
                       <InlineStack key={f} gap="150" blockAlign="start" wrap={false}>
-                        <Text as="span" tone="success">
-                          ✓
-                        </Text>
+                        <Text as="span" tone="success">✓</Text>
                         <Text as="span">{f}</Text>
                       </InlineStack>
                     ))}
@@ -157,15 +132,9 @@ export default function Billing() {
 
                   <Box>
                     {isCurrent ? (
-                      <Button disabled fullWidth>
-                        Current plan
-                      </Button>
+                      <Button disabled fullWidth>Current plan</Button>
                     ) : p.id === "FREE" ? (
-                      <Button
-                        fullWidth
-                        loading={busy}
-                        onClick={() => fetcher.submit({ intent: "cancel" }, { method: "post" })}
-                      >
+                      <Button fullWidth loading={busy} onClick={() => fetcher.submit({ intent: "cancel" }, { method: "post" })}>
                         Downgrade to Free
                       </Button>
                     ) : (
@@ -173,9 +142,7 @@ export default function Billing() {
                         fullWidth
                         variant={popular ? "primary" : "secondary"}
                         loading={busy}
-                        onClick={() =>
-                          fetcher.submit({ intent: "upgrade", plan: p.id }, { method: "post" })
-                        }
+                        onClick={() => fetcher.submit({ intent: "upgrade", plan: p.id }, { method: "post" })}
                       >
                         {isUpgrade ? `Upgrade to ${p.name}` : `Switch to ${p.name}`}
                       </Button>

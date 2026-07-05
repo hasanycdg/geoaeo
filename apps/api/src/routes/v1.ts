@@ -585,10 +585,14 @@ v1.get("/plans", async (c) => {
 // --- Billing -----------------------------------------------------------------
 v1.post("/billing/checkout", async (c) => {
   const t = tenantOf(c);
-  const body = await c.req.json<{ plan: "STARTER" | "GROWTH" | "PRO"; returnUrl: string }>();
+  const body = await c.req.json<{
+    plan: "STARTER" | "GROWTH" | "PRO";
+    returnUrl: string;
+    interval?: "monthly" | "yearly";
+  }>();
   const { billing } = await adaptersFor(t);
   try {
-    const session = await billing.createCheckout(t, body.plan, body.returnUrl);
+    const session = await billing.createCheckout(t, body.plan, body.returnUrl, body.interval ?? "monthly");
     return c.json(session);
   } catch (err) {
     // e.g. "Apps without a public distribution cannot use the Billing API" in dev.

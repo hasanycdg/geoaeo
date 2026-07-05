@@ -3,8 +3,8 @@
 // `name` is set to the Plan id so we can map it back without extra storage.
 import crypto from "node:crypto";
 import type { Plan, Tenant } from "@geo/db";
-import type { BillingPort, BillingSyncResult, CheckoutSession } from "@geo/core/ports";
-import { planConfig } from "@geo/core/config/plans";
+import type { BillingPort, BillingInterval, BillingSyncResult, CheckoutSession } from "@geo/core/ports";
+import { planConfig, yearlyPriceUsd } from "@geo/core/config/plans";
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2025-01";
 const PLAN_NAMES: Plan[] = ["STARTER", "GROWTH", "PRO"];
@@ -33,9 +33,18 @@ export class ShopifyBillingAdapter implements BillingPort {
     return body.data as T;
   }
 
-  async createCheckout(tenant: Tenant, plan: Plan, returnUrl: string): Promise<CheckoutSession> {
+  async createCheckout(
+    tenant: Tenant,
+    plan: Plan,
+    returnUrl: string,
+    interval: BillingInterval = "monthly",
+  ): Promise<CheckoutSession> {
     const cfg = planConfig(plan);
     const isTest = process.env.SHOPIFY_BILLING_TEST === "true";
+    const yearly = interval === "yearly";
+    const amount = yearly ? yearlyPriceUsd(cfg) : cfg.priceUsd;
+    // `interval` is a controlled enum literal (not user input) → safe to inline.
+    const gqlInterval = yearly ? "ANNUAL" : "EVERY_30_DAYS";
     const mutation = `#graphql
       mutation Create($name: String!, $returnUrl: URL!, $amount: Decimal!, $test: Boolean!) {
         appSubscriptionCreate(
@@ -43,7 +52,7 @@ export class ShopifyBillingAdapter implements BillingPort {
           returnUrl: $returnUrl
           test: $test
           lineItems: [{
-            plan: { appRecurringPricingDetails: { price: { amount: $amount, currencyCode: USD }, interval: EVERY_30_DAYS } }
+            plan: { appRecurringPricingDetails: { price: { amount: $amount, currencyCode: USD }, interval: ${gqlInterval} } }
           }]
         ) {
           confirmationUrl
@@ -58,9 +67,9 @@ export class ShopifyBillingAdapter implements BillingPort {
         userErrors: { field: string[]; message: string }[];
       };
     }>(tenant.externalId, mutation, {
-      name: plan,
+      name: plan, // keep the plan id as the name so getActivePlan/webhook map it back
       returnUrl,
-      amount: cfg.priceUsd.toFixed(2),
+      amount: amount.toFixed(2),
       test: isTest,
     });
     const r = data.appSubscriptionCreate;

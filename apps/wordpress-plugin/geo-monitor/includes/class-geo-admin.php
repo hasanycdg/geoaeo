@@ -165,11 +165,18 @@ class Geo_Admin {
                 if ($pop)   echo ' <span class="geo-tag">' . esc_html__('Popular', 'geo-monitor') . '</span>';
                 if ($isCur) echo ' <span class="geo-tag ok">' . esc_html__('Current', 'geo-monitor') . '</span>';
                 echo '</div>';
-                echo '<div class="price">$' . esc_html((string) (isset($p['priceUsd']) ? $p['priceUsd'] : 0));
-                if ((float) (isset($p['priceUsd']) ? $p['priceUsd'] : 0) > 0) {
+                $priceM = (float) (isset($p['priceUsd']) ? $p['priceUsd'] : 0);
+                $priceY = (float) (isset($p['priceYearlyUsd']) ? $p['priceYearlyUsd'] : $priceM * 10);
+                echo '<div class="price">$' . esc_html((string) $priceM);
+                if ($priceM > 0) {
                     echo '<span class="per">' . esc_html__('/mo', 'geo-monitor') . '</span>';
                 }
                 echo '</div>';
+                if ($priceM > 0) {
+                    echo '<div class="geo-muted geo-year-note">' .
+                        esc_html(sprintf(__('or $%s/yr — 2 months free', 'geo-monitor'), (string) $priceY)) .
+                        '</div>';
+                }
                 echo '<ul class="geo-feats">';
                 foreach ((array) (isset($p['features']) ? $p['features'] : array()) as $f) {
                     echo '<li>' . esc_html($f) . '</li>';
@@ -180,10 +187,18 @@ class Geo_Admin {
                 } elseif ($pid === 'FREE') {
                     echo '<span class="geo-muted">' . esc_html__('Free tier', 'geo-monitor') . '</span>';
                 } else {
+                    $name = isset($p['name']) ? $p['name'] : $pid;
+                    // Monthly
                     echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
                     wp_nonce_field('geo_upgrade');
-                    echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pid) . '" />';
-                    echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html(sprintf(__('Choose %s', 'geo-monitor'), isset($p['name']) ? $p['name'] : $pid)) . '</button>';
+                    echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pid) . '" /><input type="hidden" name="interval" value="monthly" />';
+                    echo '<button type="submit" class="geo-btn geo-btn-primary">' . esc_html(sprintf(__('Choose %s (monthly)', 'geo-monitor'), $name)) . '</button>';
+                    echo '</form>';
+                    // Yearly
+                    echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
+                    wp_nonce_field('geo_upgrade');
+                    echo '<input type="hidden" name="action" value="geo_upgrade" /><input type="hidden" name="plan" value="' . esc_attr($pid) . '" /><input type="hidden" name="interval" value="yearly" />';
+                    echo '<button type="submit" class="geo-btn geo-btn-ghost">' . esc_html__('Pay yearly (2 mo free)', 'geo-monitor') . '</button>';
                     echo '</form>';
                 }
                 echo '</div>';
@@ -450,9 +465,14 @@ class Geo_Admin {
 
     public function upgrade() {
         $this->guard('geo_upgrade');
-        $plan = sanitize_text_field(wp_unslash($_POST['plan'] ?? 'STARTER'));
+        $plan     = sanitize_text_field(wp_unslash($_POST['plan'] ?? 'STARTER'));
+        $interval = sanitize_text_field(wp_unslash($_POST['interval'] ?? 'monthly'));
+        if (!in_array($interval, array('monthly', 'yearly'), true)) {
+            $interval = 'monthly';
+        }
         $res = $this->client->post('/api/v1/billing/checkout', array(
             'plan'      => $plan,
+            'interval'  => $interval,
             'returnUrl' => admin_url('admin.php?page=geo-monitor'),
         ));
         if (!is_wp_error($res) && !empty($res['url'])) {
