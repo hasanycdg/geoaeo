@@ -98,8 +98,15 @@ export default function SettingsRoute() {
 
   return (
     <Page>
-      <TitleBar title="Setup" />
+      <TitleBar title="Brand Settings" />
       <BlockStack gap="500">
+        <BlockStack gap="100">
+          <Text as="h1" variant="headingLg">Brand Settings</Text>
+          <Text as="p" tone="subdued">
+            Tell us who you are, the buyer questions to track, and who your competitors are — this powers every scan.
+          </Text>
+        </BlockStack>
+
         <Card>
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">Your brand</Text>

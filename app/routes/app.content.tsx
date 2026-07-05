@@ -58,6 +58,12 @@ export default function Content() {
     <Page>
       <TitleBar title="AI content" />
       <BlockStack gap="500">
+        <BlockStack gap="100">
+          <Text as="h1" variant="headingLg">AI content</Text>
+          <Text as="p" tone="subdued">
+            Generate a machine-readable catalog map (llms.txt) and rewrite product copy so AI assistants recommend you.
+          </Text>
+        </BlockStack>
         <LlmsTxtCard initial={llmsTxt} generatedAt={llmsTxtGeneratedAt} proxyPath={proxyPath} />
         <ProductCopyCard products={products} />
       </BlockStack>
