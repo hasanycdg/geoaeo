@@ -1,14 +1,16 @@
-# Production stack for the GEO backend (backend-only: no Shopify app here).
+# Production stack for GEO: backend (api-web + api-worker) AND the embedded
+# Shopify Remix app (web), all sharing ONE Postgres/Redis.
 #
-#   Caddy (TLS) ──► api-web:3000
-#   api-worker ───► Redis + Postgres   (BullMQ jobs, all LLM calls)
-#   migrate (one-shot) runs `prisma migrate deploy` before the API starts.
+#   nginx (TLS) ─► api.<domain> → api-web:3000   (backend / WordPress + Shopify API)
+#   nginx (TLS) ─► app.<domain> → web:3000       (embedded Shopify Remix app)
+#   api-worker ──► Redis + Postgres              (BullMQ jobs, all LLM calls)
+#   migrate (one-shot) applies @geo/db migrations before api-web/web start.
 #
 # Deploy on the server:
 #   cp .env.prod.example .env   # then fill in real values
 #   docker compose -f docker-compose.prod.yml up -d --build
 #
-# The api-web and api-worker services share ONE image (built once, reused).
+# api-web/api-worker share the geo-api image; web is a separate geo-web image.
 services:
   postgres:
     image: postgres:16-alpine
@@ -77,6 +79,30 @@ services:
     # No build here — reuses the image built by api-web/migrate.
     command: ["pnpm", "--filter", "@geo/api", "worker"]
     env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Embedded Shopify Remix app. Shares the DB with the backend (it writes the
+  # tenant + offline token on install, which the worker then reads). Talks to the
+  # API over the internal compose network (no public hop). Fronted by nginx at
+  # app.<domain>. Does NOT run migrations (the migrate service owns the schema).
+  web:
+    image: geo-web:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    env_file: .env
+    environment:
+      # Reach the API internally; overrides any GEO_API_URL in .env.
+      GEO_API_URL: "http://api-web:3000"
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-8780}:3000"
     depends_on:
       postgres:
         condition: service_healthy
