@@ -19,7 +19,7 @@ interface ShopifyProductNode {
 const CATALOG_QUERY = `#graphql
   query LlmsTxtData {
     shop { name description primaryDomain { url } }
-    products(first: 100, query: "status:active", sortKey: BEST_SELLING) {
+    products(first: 100, query: "status:active", sortKey: UPDATED_AT, reverse: true) {
       edges { node { id title handle onlineStoreUrl description productType tags } }
     }
   }`;

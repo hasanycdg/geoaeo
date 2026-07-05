@@ -10,7 +10,6 @@ import {
   Text,
   Button,
   Select,
-  Badge,
   Banner,
   Box,
   List,
@@ -59,6 +58,12 @@ export default function Content() {
     <Page>
       <TitleBar title="AI content" />
       <BlockStack gap="500">
+        <BlockStack gap="100">
+          <Text as="h1" variant="headingLg">AI content</Text>
+          <Text as="p" tone="subdued">
+            Generate a machine-readable catalog map (llms.txt) and rewrite product copy so AI assistants recommend you.
+          </Text>
+        </BlockStack>
         <LlmsTxtCard initial={llmsTxt} generatedAt={llmsTxtGeneratedAt} proxyPath={proxyPath} />
         <ProductCopyCard products={products} />
       </BlockStack>
@@ -82,11 +87,11 @@ function LlmsTxtCard({
   const copy = () => navigator.clipboard.writeText(content);
   const download = () => {
     const blob = new Blob([content], { type: "text/plain" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "llms.txt";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const anchor = document.createElement("a");
+    anchor.href = URL.createObjectURL(blob);
+    anchor.download = "llms.txt";
+    anchor.click();
+    URL.revokeObjectURL(anchor.href);
   };
 
   return (
@@ -105,9 +110,7 @@ function LlmsTxtCard({
         {generatedAt && !fetcher.data && (
           <Text as="span" tone="subdued">Last generated {new Date(generatedAt).toLocaleString()}</Text>
         )}
-        {fetcher.data?.kind === "llms" && (
-          <Banner tone="success">Generated from {fetcher.data.productCount} products.</Banner>
-        )}
+        {fetcher.data?.kind === "llms" && <Banner tone="success">Generated from {fetcher.data.productCount} catalog items.</Banner>}
 
         {content && (
           <>

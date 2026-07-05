@@ -17,7 +17,7 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
-import { apiGet, apiPost, apiDelete } from "../geo/backend.server";
+import { apiDelete, apiGet, apiPost } from "../geo/backend.server";
 import type { TenantWithConfig } from "@geo/core/models";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -38,7 +38,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const brandName = String(form.get("brandName") || "").trim();
         const brandAliases = String(form.get("brandAliases") || "")
           .split(",")
-          .map((s) => s.trim())
+          .map((value) => value.trim())
           .filter(Boolean);
         const primaryDomain = String(form.get("primaryDomain") || "").trim();
         await apiPost(shop, "/api/v1/tenant", { brandName, brandAliases, primaryDomain });
@@ -65,7 +65,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           name,
           aliases: String(form.get("aliases") || "")
             .split(",")
-            .map((s) => s.trim())
+            .map((value) => value.trim())
             .filter(Boolean),
         });
         return json({ ok: true });
@@ -82,7 +82,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 };
 
-export default function Settings() {
+export default function SettingsRoute() {
   const { shop, plan } = useLoaderData<typeof loader>();
   const submit = useSubmit();
   const nav = useNavigation();
@@ -98,8 +98,15 @@ export default function Settings() {
 
   return (
     <Page>
-      <TitleBar title="Setup" />
+      <TitleBar title="Brand Settings" />
       <BlockStack gap="500">
+        <BlockStack gap="100">
+          <Text as="h1" variant="headingLg">Brand Settings</Text>
+          <Text as="p" tone="subdued">
+            Tell us who you are, the buyer questions to track, and who your competitors are — this powers every scan.
+          </Text>
+        </BlockStack>
+
         <Card>
           <BlockStack gap="400">
             <Text as="h2" variant="headingMd">Your brand</Text>

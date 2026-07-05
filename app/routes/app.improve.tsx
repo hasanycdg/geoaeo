@@ -70,8 +70,15 @@ export default function Improve() {
 
   return (
     <Page>
-      <TitleBar title="Improve visibility" />
+      <TitleBar title="AI Readiness" />
       <BlockStack gap="500">
+        <BlockStack gap="100">
+          <Text as="h1" variant="headingLg">AI Readiness</Text>
+          <Text as="p" tone="subdued">
+            Technical checks that decide whether AI engines can read and recommend your store — with concrete fixes.
+          </Text>
+        </BlockStack>
+
         <Card>
           <InlineStack align="space-between" blockAlign="center">
             <BlockStack gap="100">

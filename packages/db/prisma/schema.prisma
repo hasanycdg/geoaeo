@@ -79,6 +79,7 @@ enum RecommendationType {
   SCHEMA
   LLMS_TXT
   PRODUCT_COPY
+  WEB
 }
 
 enum RecommendationStatus {
@@ -123,6 +124,9 @@ model Tenant {
   usageQueriesThisPeriod Int      @default(0)
   usagePeriodStart       DateTime @default(now())
 
+  // Deep Scan credits consumed this billing period (reset alongside the quota window).
+  deepScanCreditsUsedThisPeriod Int @default(0)
+
   // Cached llms.txt (generated from the catalog; served live per platform).
   llmsTxt            String?
   llmsTxtGeneratedAt DateTime?
@@ -151,8 +155,113 @@ model Tenant {
   runs            Run[]
   recommendations Recommendation[]
   alerts          Alert[]
+  deepReports     DeepReport[]
+  deepScans       DeepScan[]
 
   @@unique([platform, externalId])
+}
+
+// Persisted Deep Analysis reports. Each "Generate" saves a new immutable
+// snapshot so merchants keep a dated history and can reopen past reports.
+model DeepReport {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  visibilityScore Int
+  verdict         String
+  data            Json // the full DeepReport payload
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+enum DeepScanStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+// Deep Scan: a deeper, credit-gated workflow (separate from regular scans and
+// Deep Analysis). Runs as an async BullMQ job through explicit phases; each
+// phase result is persisted so a failed job never redoes expensive work.
+model DeepScan {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  scanType     String         @default("deep")
+  status       DeepScanStatus @default(PENDING)
+  currentPhase String         @default("SHOP_SNAPSHOT")
+  creditCost   Int            @default(25)
+
+  startedAt    DateTime?
+  completedAt  DateTime?
+  failedAt     DateTime?
+  errorMessage String?
+
+  // Per-phase results (persisted so the job can resume / skip expensive steps).
+  shopSnapshot         Json?
+  generatedPrompts     Json?
+  detectedCompetitors  Json?
+  selectedCompetitors  Json?
+  gapFindings          Json?
+  recommendations      Json?
+  costEstimate         Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers  DeepScanAnswer[]
+  research DeepScanCompetitorResearch[]
+
+  @@index([tenantId, createdAt])
+}
+
+// One AI answer captured during a Deep Scan's visibility phase.
+model DeepScanAnswer {
+  id         String   @id @default(cuid())
+  deepScanId String
+  deepScan   DeepScan @relation(fields: [deepScanId], references: [id], onDelete: Cascade)
+
+  prompt           String
+  promptIntent     String?
+  engine           String
+  answerText       String
+  citations        Json?
+  detectedBrands   Json?
+  ownBrandMentioned Boolean @default(false)
+  ownBrandPosition Int?
+  sentiment        String  @default("UNKNOWN")
+
+  createdAt DateTime @default(now())
+
+  @@index([deepScanId])
+}
+
+// Structured research signals for one of the top-2 selected competitors.
+model DeepScanCompetitorResearch {
+  id         String   @id @default(cuid())
+  deepScanId String
+  deepScan   DeepScan @relation(fields: [deepScanId], references: [id], onDelete: Cascade)
+
+  competitorName   String
+  competitorDomain String?
+  mentionCount     Int      @default(0)
+  avgPosition      Float?
+  engines          Json?
+  researchedPages  Json?
+  schemaAudit      Json?
+  contentPatterns  Json?
+  externalSources  Json?
+  comparisonToShop Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([deepScanId])
+  @@index([competitorDomain, createdAt])
 }
 
 // Platform access secret, kept separate from the tenant profile:

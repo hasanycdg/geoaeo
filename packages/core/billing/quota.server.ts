@@ -12,8 +12,53 @@ export async function rolloverIfNeeded(tenant: Tenant): Promise<Tenant> {
   if (Date.now() - tenant.usagePeriodStart.getTime() < PERIOD_MS) return tenant;
   return prisma.tenant.update({
     where: { id: tenant.id },
-    data: { usageQueriesThisPeriod: 0, usagePeriodStart: new Date() },
+    data: {
+      usageQueriesThisPeriod: 0,
+      deepScanCreditsUsedThisPeriod: 0,
+      usagePeriodStart: new Date(),
+    },
   });
+}
+
+/** Deep Scan credits left this period for the shop's plan. */
+export function remainingDeepScanCredits(
+  tenant: Pick<Tenant, "plan" | "deepScanCreditsUsedThisPeriod">,
+): number {
+  const allowance = planConfig(tenant.plan).deepScanCreditsPerPeriod;
+  return Math.max(0, allowance - tenant.deepScanCreditsUsedThisPeriod);
+}
+
+/** Whether the tenant can afford `n` more Deep Scan credits this period. */
+export function canConsumeDeepScanCredits(
+  tenant: Pick<Tenant, "plan" | "deepScanCreditsUsedThisPeriod">,
+  n: number,
+): boolean {
+  if (n <= 0) return true;
+  const allowance = planConfig(tenant.plan).deepScanCreditsPerPeriod;
+  return Math.max(0, allowance - tenant.deepScanCreditsUsedThisPeriod) >= n;
+}
+
+/** Atomically consume `n` Deep Scan credits. */
+export async function consumeDeepScanCredits(tenantId: string, n: number): Promise<void> {
+  if (n <= 0) return;
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: { deepScanCreditsUsedThisPeriod: { increment: n } },
+  });
+}
+
+/** Atomically reserve `n` Deep Scan credits. Returns false when insufficient. */
+export async function reserveDeepScanCredits(tenant: Tenant, n: number): Promise<boolean> {
+  if (!canConsumeDeepScanCredits(tenant, n)) return false;
+  const allowance = planConfig(tenant.plan).deepScanCreditsPerPeriod;
+  const res = await prisma.tenant.updateMany({
+    where: {
+      id: tenant.id,
+      deepScanCreditsUsedThisPeriod: { lte: allowance - n },
+    },
+    data: { deepScanCreditsUsedThisPeriod: { increment: n } },
+  });
+  return res.count === 1;
 }
 
 /** Grounded calls left this period for the shop's plan. */

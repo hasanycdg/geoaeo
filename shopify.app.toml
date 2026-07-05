@@ -1,50 +1,45 @@
-# This file stores configurations for your Shopify app.
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = ""
+client_id = "fec9eb0ef99d02a61d79d157b934a5ee"
+name = "visible-test"
+application_url = "https://shopify.dev/apps/default-app-home"
+embedded = true
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "read_products"
+scopes = "read_products,write_products"
 
-# Serves the generated llms.txt at https://<store>/apps/geo/llms.txt
-# `shopify app dev` rewrites `url` to the dev tunnel automatically; set it to
-# your deployed app URL (+ "/proxy") before `shopify app deploy`.
 [app_proxy]
 url = "https://REPLACE-WITH-YOUR-APP-URL/proxy"
 subpath = "geo"
 prefix = "apps"
 
 [webhooks]
-api_version = "2024-10"
+api_version = "2026-10"
 
-  # Handled by: /app/routes/webhooks.app.uninstalled.tsx
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
-  topics = ["app/uninstalled"]
+  topics = [ "app/uninstalled" ]
 
-  # Handled by: /app/routes/webhooks.app.scopes_update.tsx
   [[webhooks.subscriptions]]
-  topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
+  topics = [ "app/scopes_update" ]
 
-  # Webhooks can have filters
-  # Only receive webhooks for product updates with a product price >= 10.00
-  # See: https://shopify.dev/docs/apps/build/webhooks/customize/filters
-  # [[webhooks.subscriptions]]
-  # topics = ["products/update"]
-  # uri = "/webhooks/products/update"
-  # filter = "variants.price:>=10.00"
-
-  # Mandatory GDPR compliance webhooks for public apps.
-  # See: https://shopify.dev/docs/apps/build/privacy-law-compliance
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/data_request"
-  compliance_topics = ["customers/data_request"]
+  compliance_topics = [ "customers/data_request" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/customers/redact"
-  compliance_topics = ["customers/redact"]
+  compliance_topics = [ "customers/redact" ]
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/shop/redact"
-  compliance_topics = ["shop/redact"]
+  compliance_topics = [ "shop/redact" ]
+
+[auth]
+redirect_urls = [ "https://shopify.dev/apps/default-app-home/api/auth" ]
+
+[build]
+include_config_on_deploy = true
+automatically_update_urls_on_dev = true

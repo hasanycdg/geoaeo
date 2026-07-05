@@ -1,0 +1,11 @@
+api_version = "2025-07"
+
+[[extensions]]
+name = "GEO – AI product copy"
+handle = "geo-product-copy"
+uid = "c4c71d67-afcc-0a9a-767c-c0bf46d6c5b324760321"
+type = "ui_extension"
+
+  [[extensions.targeting]]
+  target = "admin.product-details.block.render"
+  module = "./src/BlockExtension.tsx"

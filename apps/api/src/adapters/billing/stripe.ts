@@ -6,31 +6,24 @@
 //   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 import Stripe from "stripe";
 import type { Plan, Tenant } from "@geo/db";
-import type { BillingPort, BillingSyncResult, CheckoutSession } from "@geo/core/ports";
+import type { BillingPort, BillingInterval, BillingSyncResult, CheckoutSession } from "@geo/core/ports";
 
-function priceForPlan(plan: Plan): string {
-  const map: Record<Plan, string | undefined> = {
-    FREE: undefined,
-    STARTER: process.env.STRIPE_PRICE_STARTER,
-    GROWTH: process.env.STRIPE_PRICE_GROWTH,
-    PRO: process.env.STRIPE_PRICE_PRO,
-  };
-  const price = map[plan];
-  if (!price) throw new Error(`No Stripe price configured for plan ${plan}`);
+// Monthly price ids: STRIPE_PRICE_{PLAN}. Yearly (2 months free): STRIPE_PRICE_{PLAN}_YEARLY.
+function priceForPlan(plan: Plan, interval: BillingInterval): string {
+  const suffix = interval === "yearly" ? "_YEARLY" : "";
+  const price = process.env[`STRIPE_PRICE_${plan}${suffix}`];
+  if (!price) throw new Error(`No Stripe ${interval} price configured for plan ${plan}`);
   return price;
 }
 
 function planForPrice(priceId: string | undefined): Plan {
-  switch (priceId) {
-    case process.env.STRIPE_PRICE_STARTER:
-      return "STARTER";
-    case process.env.STRIPE_PRICE_GROWTH:
-      return "GROWTH";
-    case process.env.STRIPE_PRICE_PRO:
-      return "PRO";
-    default:
-      return "FREE";
+  if (!priceId) return "FREE";
+  for (const plan of ["STARTER", "GROWTH", "PRO"] as Plan[]) {
+    if (priceId === process.env[`STRIPE_PRICE_${plan}`] || priceId === process.env[`STRIPE_PRICE_${plan}_YEARLY`]) {
+      return plan;
+    }
   }
+  return "FREE";
 }
 
 export class StripeBillingAdapter implements BillingPort {
@@ -49,10 +42,15 @@ export class StripeBillingAdapter implements BillingPort {
     return this._stripe;
   }
 
-  async createCheckout(tenant: Tenant, plan: Plan, returnUrl: string): Promise<CheckoutSession> {
+  async createCheckout(
+    tenant: Tenant,
+    plan: Plan,
+    returnUrl: string,
+    interval: BillingInterval = "monthly",
+  ): Promise<CheckoutSession> {
     const session = await this.stripe.checkout.sessions.create({
       mode: "subscription",
-      line_items: [{ price: priceForPlan(plan), quantity: 1 }],
+      line_items: [{ price: priceForPlan(plan, interval), quantity: 1 }],
       success_url: `${returnUrl}?billing=success`,
       cancel_url: `${returnUrl}?billing=cancelled`,
       client_reference_id: tenant.externalId,
