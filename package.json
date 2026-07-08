@@ -31,7 +31,7 @@
     "@anthropic-ai/sdk": "^0.106.0",
     "@geo/core": "workspace:*",
     "@geo/db": "workspace:*",
-    "@prisma/client": "^6.2.1",
+    "@prisma/client": "^7.8.0",
     "@remix-run/dev": "^2.16.1",
     "@remix-run/fs-routes": "^2.16.1",
     "@remix-run/node": "^2.16.1",
@@ -46,7 +46,7 @@
     "ioredis": "^5.11.1",
     "isbot": "^5.1.0",
     "openai": "^6.45.0",
-    "prisma": "^6.2.1",
+    "prisma": "^7.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "vite-tsconfig-paths": "^5.0.1"
