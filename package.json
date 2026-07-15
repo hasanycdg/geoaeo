@@ -28,7 +28,7 @@
     "node": ">=20.19 <22 || >=22.12"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.106.0",
+    "@anthropic-ai/sdk": "^0.109.0",
     "@geo/core": "workspace:*",
     "@geo/db": "workspace:*",
     "@prisma/client": "^6.2.1",
