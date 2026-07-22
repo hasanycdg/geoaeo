@@ -20,7 +20,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.106.0",
     "@geo/db": "workspace:*",
-    "bullmq": "^5.79.2",
+    "bullmq": "^5.79.3",
     "ioredis": "^5.11.1",
     "openai": "^6.45.0"
   }
